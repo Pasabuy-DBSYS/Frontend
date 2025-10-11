@@ -57,7 +57,6 @@ const PhoneVerificationPage: React.FC = () => {
     if (verificationCode.length === 6) {
       Keyboard.dismiss();
       // Handle verification logic here
-      console.log("Verification code:", verificationCode);
     }
   };
 

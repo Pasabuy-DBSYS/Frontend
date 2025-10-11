@@ -9,7 +9,7 @@ import { useState } from "react";
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const StudentIdVerify = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const [frontPhoto, setFrontPhoto] = useState<string | null>(null);
   const [backPhoto, setBackPhoto] = useState<string | null>(null);
 
@@ -285,7 +285,9 @@ const StudentIdVerify = () => {
               );
               return;
             }
-            navigation.navigate("InsuranceVerification" as never);
+            navigation.navigate("InsuranceVerification" as never, {
+              title: "Update Insurance",
+            });
           }}
           backgroundColor="#545EE1"
           textColor="#fff"

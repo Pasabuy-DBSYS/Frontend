@@ -102,4 +102,15 @@ export interface Order {
   fee: number;
 }
 
+export interface User {
+  imageUrl: string;
+  firstName: string;
+  lastName: string;
+  middleName: string | null;
+  phoneNumber: string;
+  dateOfBirth: Date;
+  emailAddress: string;
+  password: string;
+}
+
 export { Coordinates, CommissionData };

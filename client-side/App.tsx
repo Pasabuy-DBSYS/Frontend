@@ -22,6 +22,8 @@ import Orders from "./app/customer/Orders";
 import CourierNavigationBar from "./components/CourierNavigationBar";
 import LocationPicker from "./components/LocationPicker";
 import OrderHistory from "./app/customer/OrderHistory";
+import Settings from "./components/Settings";
+import ChangePassword from "./app/auth/ChangePassword";
 
 const Stack = createNativeStackNavigator();
 
@@ -49,6 +51,7 @@ export default function App() {
           name="InsuranceVerification"
           component={InsuranceVerification}
         />
+
         <Stack.Screen
           name="ApplicationSuccessful"
           component={ApplicationSuccessful}
@@ -69,6 +72,8 @@ export default function App() {
         <Stack.Screen name="Orders" component={Orders} />
         <Stack.Screen name="LocationPicker" component={LocationPicker} />
         <Stack.Screen name="OrderHistory" component={OrderHistory} />
+        <Stack.Screen name="Settings" component={Settings}></Stack.Screen>
+        <Stack.Screen name="ChangePassword" component={ChangePassword} />
       </Stack.Navigator>
     </NavigationContainer>
   );

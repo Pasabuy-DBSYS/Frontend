@@ -40,6 +40,7 @@ export type FontWeight =
   | "800"
   | "900";
 
+export type HistoryMode = "Order" | "Deliveries";
 export type AuthLeftButtonProps = {
   onPress: () => void;
   size?: number;

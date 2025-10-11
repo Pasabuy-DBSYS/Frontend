@@ -1,6 +1,6 @@
 import AuthLeftButton from "@/components/svg/AuthLeftButton";
 import { View, Text, TouchableOpacity, Alert, Dimensions } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import Camera from "@/components/svg/Camera";
 import { Button } from "@/components/Button";
 import * as ImagePicker from "expo-image-picker";
@@ -8,13 +8,13 @@ import { useState } from "react";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const StudentIdVerify = () => {
+const InsuranceVerification = () => {
   const navigation = useNavigation();
   const [insurancePhoto, setInsurancePhoto] = useState<string | null>(null);
+  const route = useRoute<any>();
+  const { title } = route.params;
 
-  const getFileName = (uri: string) => {
-    return uri.split("/").pop() || "image.jpg";
-  };
+  const getFileName = (uri: string) => uri.split("/").pop() || "image.jpg";
 
   const openCamera = async (type: "insurance") => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -29,9 +29,8 @@ const StudentIdVerify = () => {
       quality: 1,
     });
 
-    if (!result.canceled) {
-      if (type === "insurance") setInsurancePhoto(result.assets[0].uri);
-    }
+    if (!result.canceled && type === "insurance")
+      setInsurancePhoto(result.assets[0].uri);
   };
 
   const pickFromGallery = async (type: "insurance") => {
@@ -48,31 +47,16 @@ const StudentIdVerify = () => {
       quality: 1,
     });
 
-    if (!result.canceled) {
-      if (type === "insurance") setInsurancePhoto(result.assets[0].uri);
-    }
+    if (!result.canceled && type === "insurance")
+      setInsurancePhoto(result.assets[0].uri);
   };
 
   const showImageOptions = (type: "insurance") => {
-    Alert.alert(
-      "Upload Photo",
-      "Choose an option",
-      [
-        {
-          text: "Take Photo",
-          onPress: () => openCamera(type),
-        },
-        {
-          text: "Choose from Gallery",
-          onPress: () => pickFromGallery(type),
-        },
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-      ],
-      { cancelable: true }
-    );
+    Alert.alert("Upload Photo", "Choose an option", [
+      { text: "Take Photo", onPress: () => openCamera(type) },
+      { text: "Choose from Gallery", onPress: () => pickFromGallery(type) },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const renderUploadBox = (
@@ -124,11 +108,7 @@ const StudentIdVerify = () => {
               File name:
             </Text>
             <Text
-              style={{
-                fontSize: 14,
-                color: "#1F2937",
-                fontWeight: "600",
-              }}
+              style={{ fontSize: 14, color: "#1F2937", fontWeight: "600" }}
               numberOfLines={1}
               ellipsizeMode="middle"
             >
@@ -214,6 +194,7 @@ const StudentIdVerify = () => {
       }}
     >
       <AuthLeftButton onPress={() => navigation.goBack()} />
+
       <View
         style={{
           flexDirection: "column",
@@ -229,7 +210,7 @@ const StudentIdVerify = () => {
             color: "#000000",
           }}
         >
-          Enter your insurance
+          {title}
         </Text>
         <Text
           style={{
@@ -242,7 +223,6 @@ const StudentIdVerify = () => {
         </Text>
       </View>
 
-      {/* Front Side Upload */}
       {renderUploadBox(
         insurancePhoto,
         "insurance",
@@ -264,13 +244,12 @@ const StudentIdVerify = () => {
           padding={SCREEN_HEIGHT * 0.018}
           width="100%"
           height={SCREEN_HEIGHT * 0.065}
-          margin={0}
           borderRadius={30}
           onPress={() => {
             if (!insurancePhoto) {
               Alert.alert(
                 "Missing Photos",
-                "Please upload both front and back photos of your ID."
+                "Please upload a photo of your insurance receipt."
               );
               return;
             }
@@ -285,4 +264,4 @@ const StudentIdVerify = () => {
   );
 };
 
-export default StudentIdVerify;
+export default InsuranceVerification;

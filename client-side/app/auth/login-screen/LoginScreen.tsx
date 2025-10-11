@@ -18,7 +18,9 @@ const LoginScreen = () => {
   const [password, setPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
-  const handleLogin = () => {};
+  const handleLogin = () => {
+    navigation.navigate("CourierNavigationBar" as never);
+  };
 
   const handleForgotPassword = () => {
     navigation.navigate("ForgotPasswordScreen" as never);

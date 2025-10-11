@@ -13,8 +13,11 @@ import {
   ScrollView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { orders } from "@/constants/orders";
+import { deliveries, orders } from "@/constants/orders";
 import { Order } from "@/types/interfaces";
+import { Button } from "@/components/Button";
+import { HistoryMode } from "@/types/types";
+import ExpandOrder from "@/components/svg/ExpandOrder";
 
 // Enable layout animation on Android
 if (
@@ -75,6 +78,8 @@ const getStatusTextColor = (status: string): string => {
 
 const OrderHistory = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const [orderHistoryMode, setOrderHistoryMode] =
+    useState<HistoryMode>("Order");
 
   const toggleExpand = (orderId: number) => {
     setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
@@ -109,10 +114,60 @@ const OrderHistory = () => {
               Lets you track and review all your past deliveries and orders
             </Text>
 
+            <View
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                justifyContent: "center",
+              }}
+            >
+              <Button
+                title="Orders"
+                onPress={() => setOrderHistoryMode("Order")}
+                backgroundColor={
+                  orderHistoryMode === "Order" ? "#545EE1" : "#FFFFFF"
+                }
+                textColor={
+                  orderHistoryMode === "Order"
+                    ? "#FFFFFF"
+                    : "rgba(0, 0, 0, 0.3)"
+                }
+                borderRadius={30}
+                fontSize={15}
+                fontWeight="bold"
+                padding={10}
+                margin={10}
+                width={124}
+                height={35}
+              />
+
+              <Button
+                title="Deliveries"
+                onPress={() => setOrderHistoryMode("Deliveries")}
+                backgroundColor={
+                  orderHistoryMode === "Deliveries" ? "#545EE1" : "#FFFFFF"
+                }
+                textColor={
+                  orderHistoryMode === "Deliveries"
+                    ? "#FFFFFF"
+                    : "rgba(0, 0, 0, 0.3)"
+                }
+                borderColor="#545EE1"
+                borderWidth={1}
+                borderRadius={30}
+                fontSize={15}
+                fontWeight="bold"
+                padding={10}
+                margin={10}
+                width={124}
+                height={35}
+              />
+            </View>
+
             <FlatList
               nestedScrollEnabled={true}
               scrollEnabled={false}
-              data={orders}
+              data={orderHistoryMode === "Order" ? orders : deliveries}
               keyExtractor={(item) => item.orderId.toString()}
               ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
               renderItem={({ item }) => (
@@ -166,19 +221,13 @@ const OrderHistory = () => {
                     onPress={() => toggleExpand(item.orderId)}
                     style={{
                       alignSelf: "center",
-                      backgroundColor:
-                        expandedOrderId === item.orderId ? "blue" : "black",
+                      backgroundColor: "transparent",
                       paddingHorizontal: 20,
-                      paddingVertical: 8,
                       borderRadius: 8,
                       marginTop: 10,
                     }}
                   >
-                    <Text style={{ fontWeight: "500", color: "white" }}>
-                      {expandedOrderId === item.orderId
-                        ? "Hide Details"
-                        : "Show Details"}
-                    </Text>
+                    <ExpandOrder />
                   </TouchableOpacity>
 
                   {expandedOrderId === item.orderId && (

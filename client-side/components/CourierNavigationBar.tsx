@@ -1,7 +1,7 @@
 import Home from "@/app/courier/Home";
 import Orders from "@/app/customer/Orders";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, Profiler } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import ProfileIcon from "./svg/couriers/ProfileIcon";
 import HistoryIcon from "./svg/couriers/HistoryIcon";
 import NotifcationIcon from "./svg/couriers/NotifcationIcon";
 import OrderHistory from "@/app/customer/OrderHistory";
+import Profile from "@/app/customer/Profile";
 
 const CourierNavigationBar = () => {
   const [activeTab, setActiveTab] = useState(2);
@@ -97,10 +98,10 @@ const CourierNavigationBar = () => {
           height: "90%",
         }}
       >
-        {console.log(navPage)}
         {activeTab === 2 && <Home />}
         {(activeTab === 0 || navPage) && <Orders />}
         {activeTab === 3 && <OrderHistory />}
+        {activeTab === 4 && <Profile />}
       </View>
       {/* Navbar group */}
       <View
