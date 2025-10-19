@@ -5,6 +5,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import UpdateDisplayName from "./modals/UpdateDisplayName";
 import UpdatePhoneNumber from "./modals/UpdatePhoneNumber";
 import UpdateEmail from "./modals/UpdateEmail";
+import AuthLeftButton from "./svg/AuthLeftButton";
 
 const Settings = () => {
   const navigation = useNavigation();
@@ -27,7 +28,7 @@ const Settings = () => {
         flex: 1,
         backgroundColor: "#fff",
         paddingHorizontal: 20,
-        paddingTop: 70,
+        paddingTop: 50,
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
       }}
@@ -49,6 +50,7 @@ const Settings = () => {
         onSave={() => setUpdateEmail(false)}
       ></UpdateEmail>
       {/* Header */}
+      <AuthLeftButton onPress={() => navigation.goBack()} />
       <View
         style={{
           alignItems: "center",
