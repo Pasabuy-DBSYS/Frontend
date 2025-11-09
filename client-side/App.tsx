@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Settings, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import GetStartedScreen from "./app/auth/GetStartedScreen";
@@ -16,6 +16,12 @@ import RegisterStack from "./app/auth/RegisterStack";
 import ChangePassword from "./app/auth/ChangePassword";
 import { useAuthStore } from "./app/api/store/auth_store";
 import { Role } from "./types/types";
+import LocationPicker from "./components/LocationPicker";
+import Orders from "./app/customer/Orders";
+import OrderHistory from "./app/customer/OrderHistory";
+import CourierTrackingView from "./app/courier/CourierTrackingView";
+import OrderList from "./app/courier/OrderList";
+import CourierHome from "./app/courier/CourierHome";
 
 const Stack = createNativeStackNavigator();
 
@@ -101,6 +107,16 @@ export default function App() {
         <Stack.Screen
           name="CourierNavigationBar"
           component={CourierNavigationBar}
+        />
+
+        <Stack.Screen name="Orders" component={Orders} />
+        <Stack.Screen name="LocationPicker" component={LocationPicker} />
+        <Stack.Screen name="OrderHistory" component={OrderHistory} />
+        <Stack.Screen name="CourierHome" component={CourierHome} />
+        <Stack.Screen name="OrderList" component={OrderList} />
+        <Stack.Screen
+          name="CourierTrackingView"
+          component={CourierTrackingView}
         />
       </Stack.Navigator>
     </NavigationContainer>
