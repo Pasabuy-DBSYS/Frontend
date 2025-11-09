@@ -4,6 +4,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { jwtDecode } from "jwt-decode";
 import { UserResponseDTO } from "../dto/response/auth.response.dto";
 import { getCurrentProfile } from "../user";
+import { sortRoutes } from "expo-router/build/sortRoutes";
+import { Coordinates } from "@/types/interfaces";
 
 interface DecodedToken {
   exp?: number; // JWT standard expiration (Unix timestamp in seconds)
@@ -17,6 +19,7 @@ interface AuthState {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   checkTokenValidity: () => boolean;
+  refreshToken: (newToken: string) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -26,11 +29,13 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
 
-      /** 🔑 Called after successful login */
       login: async (token: string) => {
         const isExpired = (() => {
           try {
             const decoded: DecodedToken = jwtDecode(token);
+            console.log("Decoded Token:", JSON.stringify(decoded));
+
+            console.log(`Token: ${get().token}`);
             if (!decoded.exp) return false;
             const now = Date.now() / 1000;
             return decoded.exp < now;
@@ -55,15 +60,25 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      /** 🚪 Logout and clear data */
       logout: async () => {
-        set({ token: null, user: null, isAuthenticated: false });
-        await useAuthStore.persist.clearStorage();
+        try {
+          // 1️⃣ Clear in-memory auth state
+          set({ token: null, user: null, isAuthenticated: false });
+
+          await useAuthStore.persist.clearStorage();
+
+          console.log(`NEW TOKEN: ${get().token}`);
+
+          console.log("✅ Auth store cleared successfully");
+        } catch (err) {
+          console.error("❌ Error clearing auth store:", err);
+        }
       },
 
       /** 🔁 Refresh current user info if token is still valid */
       refreshUser: async () => {
         const isValid = get().checkTokenValidity();
+
         if (!isValid) {
           console.warn("Token expired. Logging out...");
           await get().logout();
@@ -78,13 +93,17 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      /** ✅ Check if stored token is valid (can be called on app load) */
       checkTokenValidity: () => {
         const token = get().token;
         if (!token) return false;
 
         try {
           const decoded: DecodedToken = jwtDecode(token);
+          console.log(
+            "Decoded Token for validity check:",
+            JSON.stringify(decoded)
+          );
+
           if (!decoded.exp) return true;
 
           const now = Date.now() / 1000;
@@ -102,6 +121,12 @@ export const useAuthStore = create<AuthState>()(
           get().logout();
           return false;
         }
+      },
+
+      refreshToken: async (newToken: string) => {
+        await useAuthStore.persist.clearStorage();
+
+        set({ token: newToken, isAuthenticated: true });
       },
     }),
     {
