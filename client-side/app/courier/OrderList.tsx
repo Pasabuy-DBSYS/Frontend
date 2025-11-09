@@ -21,11 +21,19 @@ import LocationBlueIcon from "@/components/svg/LocationBlueIcon";
 import ConfirmPickupModal from "@/components/modals/ConfirmDeliver";
 import { OrderResponseDTO } from "../api/dto/response/auth.response.dto";
 import axios from "axios";
-import { acceptOrderById, getOrderByStatus } from "../api/orders";
+import {
+  acceptOrderById,
+  fetchOrderRealtime,
+  getOrderById,
+  getOrderByStatus,
+  stopOrderRealtime,
+} from "../api/orders";
 import { Status } from "../api/dto/response/order.response.dto";
 import { useAuthStore } from "../api/store/auth_store";
 import * as Location from "expo-location";
 import { AcceptOrderRequestDTO } from "../api/dto/request/order.request.dto";
+import * as SignalR from "@microsoft/signalr";
+import { useCourierOrderStore } from "../api/store/courier_store";
 
 if (
   Platform.OS === "android" &&
@@ -38,7 +46,7 @@ const OrderList = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const navigator = useNavigation<CourierTrackingViewNavProp>();
   const [showConfirm, setShowConfirm] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const { activeOrder, clearActiveOrder } = useCourierOrderStore();
   const [orders, setOrders] = useState<OrderResponseDTO[] | null>(null);
   const [location, setLocation] = useState<Location.LocationObject | null>(
     null
@@ -46,16 +54,19 @@ const OrderList = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const { user } = useAuthStore();
+  const { setActiveOrderId, setActiveOrder } = useCourierOrderStore();
 
-  const routeCourierTrackingView = (orderId: number) => {
+  const routeCourierTrackingView = async (orderId: number) => {
     console.log(`Order Id: ${orderId}`);
-    navigator.navigate("CourierTrackingView", { orderId });
+    const activeOrder = await getOrderById(orderId);
+    setActiveOrder(activeOrder);
+
+    navigator.navigate("CourierTrackingView", { orderId: orderId });
     setShowConfirm(false);
   };
 
   const getLocation = async () => {
     try {
-      // ✅ Ask for permission
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
         setErrorMsg("Permission to access location was denied");
@@ -89,6 +100,7 @@ const OrderList = () => {
 
   const acceptOrder = async (orderId: number) => {
     try {
+      await getLocation();
       const request: AcceptOrderRequestDTO = {
         courierId: user?.userIdPK!,
         courierLatitude: location?.coords.latitude!,
@@ -97,6 +109,7 @@ const OrderList = () => {
 
       const response = await acceptOrderById(orderId, request);
       console.log("Order accepted:", response);
+
       return response;
     } catch (err: any) {
       console.error("Error accepting order:", err.message);
@@ -105,20 +118,39 @@ const OrderList = () => {
   };
 
   useEffect(() => {
-    fetchPendingOrders();
-  }, []);
-
-  useEffect(() => {
-    fetchPendingOrders();
+    console.log(`ACTIVE ORDER: ${JSON.stringify(activeOrder)}`);
+    if (!activeOrder) {
+      fetchPendingOrders();
+      fetchOrderRealtime(
+        (newOrder) => {
+          if (newOrder.status === Status.PENDING) {
+            setOrders((prev) => (prev ? [newOrder, ...prev] : [newOrder]));
+          }
+        },
+        (updatedOrder) => {
+          setOrders((prev) =>
+            prev
+              ? prev.map((o) =>
+                  o.orderIdPK === updatedOrder.orderIdPK ? updatedOrder : o
+                )
+              : [updatedOrder]
+          );
+        }
+      );
+      return () => {
+        stopOrderRealtime();
+      };
+    }
   }, []);
 
   const onConfirmPickup = () => {
     setShowConfirm(true);
   };
 
-  const toggleExpand = (orderId: number) => {
+  const toggleExpand = (orderId: number, order: OrderResponseDTO) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
+    console.log(`Order details: ${JSON.stringify(order)}`);
   };
 
   const hasOrders = Array.isArray(orders) && orders.length > 0;
@@ -173,13 +205,15 @@ const OrderList = () => {
               }
               const isExpanded = expandedOrderId === item.orderIdPK;
               return (
-                <View
+                <TouchableOpacity
                   style={{
                     backgroundColor: "white",
                     borderRadius: 10,
                     padding: 16,
                     elevation: 2,
                   }}
+                  onPress={() => toggleExpand(item.orderIdPK, item)}
+                  activeOpacity={1} // keeps it fully opaque on press
                 >
                   <ConfirmPickupModal
                     visible={showConfirm}
@@ -211,7 +245,7 @@ const OrderList = () => {
                     </View>
 
                     <TouchableOpacity
-                      onPress={() => toggleExpand(item.orderIdPK)}
+                      onPress={() => toggleExpand(item.orderIdPK, item)}
                       activeOpacity={0.7}
                     >
                       {isExpanded ? (
@@ -259,7 +293,7 @@ const OrderList = () => {
                           </View>
 
                           <Text style={{ color: "#555", marginLeft: 28 }}>
-                            {item.request}
+                            {item.deliveryDetailsDTO?.destinationAddress}
                           </Text>
                         </View>
 
@@ -296,7 +330,7 @@ const OrderList = () => {
                             marginTop: 6,
                           }}
                         >
-                          <Text>{item.deliveryDetailsDTO.deliveryNotes}</Text>
+                          <Text>{item.deliveryDetailsDTO?.deliveryNotes}</Text>
                         </View>
                       </View>
 
@@ -334,7 +368,7 @@ const OrderList = () => {
                               lineHeight: 20,
                             }}
                           >
-                            yawa
+                            {item.deliveryDetailsDTO?.customerAddress}
                           </Text>
                         </View>
 
@@ -361,7 +395,7 @@ const OrderList = () => {
                             }}
                           >
                             <Text style={{ fontWeight: "600" }}>
-                              {item.paymentsResponseDTO.itemsFee}
+                              {item.paymentsResponseDTO?.itemsFee}
                             </Text>
                           </View>
                         </View>
@@ -384,7 +418,7 @@ const OrderList = () => {
                       </View>
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
               );
             }}
           />

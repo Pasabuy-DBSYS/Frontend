@@ -25,29 +25,20 @@ import MapView, { Marker, Polyline } from "react-native-maps";
 import { useNavigation } from "expo-router";
 import { OrdersRouteProp } from "@/types/types";
 import { useRoute } from "@react-navigation/native";
-import { courierCoordinates } from "@/constants/courier_coordinate";
+
 import { GEOAPIFY_KEY } from "@env";
 import { useAuthStore } from "../api/store/auth_store";
 import { PostOrderRequestDTO } from "../api/dto/request/order.request.dto";
 import { postOrder } from "../api/orders";
-
-const screenWidth = Dimensions.get("window").width;
+import { convertCoordinatesToAddress } from "../api/geoapify";
+import { useLocationStore } from "../api/store/location_store";
 
 const Orders: React.FC = () => {
   const [deviceLocation, setDeviceLocation] = useState<Coordinates | null>(
     null
   );
-  const [selectedPin, setSelectedPin] = useState<Coordinates | null>(null);
   const [orderPrice, setOrderPrice] = useState<number>(0);
-  const [commissionData, setCommissionData] = useState<CommissionData>({
-    address: "",
-    specification: "",
-    deliveryInstructions: "",
-    coordinates: { latitude: 0, longitude: 0 },
-  });
-
   const [coordinates, setCoordinates] = useState<Coordinates[]>([]);
-  const courierLocation = courierCoordinates;
   const recentSearched = useRef<GeoapifyFeature[]>([]);
   const mapRef = useRef<MapView>(null);
   const route = useRoute<OrdersRouteProp>();
@@ -56,11 +47,16 @@ const Orders: React.FC = () => {
     {} as PostOrderRequestDTO
   );
 
-  const params = route.params;
-  const returnAddress = params?.returnAddress;
-  const returnLocation = params?.returnLocation;
+  const {
+    setFullLocation,
+    fullLocation,
+    commissionData,
+    setCommissionData,
+    clearLocation,
+  } = useLocationStore();
 
   const { user } = useAuthStore();
+
   const postOrderFunction = async (): Promise<void> => {
     try {
       if (!user) {
@@ -68,20 +64,44 @@ const Orders: React.FC = () => {
         return;
       }
 
+      if (
+        !commissionData.coordinates ||
+        !commissionData.coordinates.latitude ||
+        !commissionData.coordinates.longitude
+      ) {
+        Alert.alert("Error", "Please select a valid delivery location.");
+        return;
+      }
+
+      const convertedAddress = await convertCoordinatesToAddress(
+        commissionData.coordinates,
+        GEOAPIFY_KEY
+      );
+      const deviceAddress = await convertCoordinatesToAddress(
+        deviceLocation as Coordinates,
+        GEOAPIFY_KEY
+      );
+
+      console.log("DEVICE ADDRESS YAWA: ", deviceAddress);
+
+      if (!convertedAddress) throw new Error("Address conversion failed.");
       const dto: PostOrderRequestDTO = {
         customerId: user.userIdPK,
         request: commissionData.specification,
         tipFee: 0,
-        status: "Pending",
+        status: 0,
         priority: 0,
-        locationLatitude: courierLocation.latitude,
-        locationLongitude: courierLocation.longitude,
-        customerLatitude: commissionData.coordinates.latitude,
-        customerLongitude: commissionData.coordinates.longitude,
-        deliveryDistance: coordinates.length > 0 ? coordinates.length : 0,
+        locationLatitude: commissionData.coordinates.latitude,
+        locationLongitude: commissionData.coordinates.longitude,
+        customerLatitude: deviceLocation?.latitude || 0,
+        customerLongitude: deviceLocation?.longitude || 0,
+        customerAddress: deviceAddress as string,
+        destinationAddress: commissionData.address,
+        deliveryDistance: coordinates.length || 0,
         deliveryNotes: commissionData.deliveryInstructions,
       };
 
+      console.log(`Order DTO: ${JSON.stringify(dto, null, 2)}`);
       setIsLoading(true);
       const response = await postOrder(dto);
       setIsLoading(false);
@@ -104,69 +124,71 @@ const Orders: React.FC = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Request permission and get current location
   useEffect(() => {
+    let isMounted = true;
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission Denied", "Location access is required.");
-        return;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "Location access is required.");
+          if (isMounted) setIsLoading(false); // ensure loading stops even if denied
+          return;
+        }
+
+        const current = await Location.getCurrentPositionAsync({});
+        const currentCoords = {
+          latitude: current.coords.latitude,
+          longitude: current.coords.longitude,
+        };
+        if (isMounted) {
+          setDeviceLocation(currentCoords); // save device location no matter what
+
+          if (fullLocation) {
+            setCommissionData({
+              coordinates: fullLocation.returnLocation,
+              address: fullLocation.returnAddress,
+              specification: "",
+              deliveryInstructions: "",
+            });
+          } else {
+            setCommissionData({
+              coordinates: currentCoords,
+              address: "",
+              specification: "",
+              deliveryInstructions: "",
+            });
+          }
+        }
+      } catch (err) {
+        console.error("❌ Failed to get device location:", err);
+
+        // 🔸 Provide a fallback (e.g., Manila)
+        const fallback = { latitude: 14.5995, longitude: 120.9842 };
+        setDeviceLocation(fallback);
+        setCommissionData({
+          coordinates: fallback,
+          address: "Manila, Philippines (Fallback)",
+          specification: "",
+          deliveryInstructions: "",
+        });
+
+        Alert.alert(
+          "Location Unavailable",
+          "Using a default Manila location since GPS data could not be retrieved."
+        );
+      } finally {
+        if (isMounted) {
+          setIsLoading(false); // ✅ always stop loading
+          console.log("✅ Location initialization complete");
+        }
       }
-      if (courierLocation && params?.returnLocation) {
-        (async () => {
-          const route = await fetchRoute(
-            courierLocation,
-            params.returnLocation
-          );
-          setCoordinates(route);
-        })();
-      }
-
-      const current = await Location.getCurrentPositionAsync({});
-
-      setDeviceLocation({
-        latitude: current.coords.latitude,
-        longitude: current.coords.longitude,
-      });
-
-      setSelectedPin({
-        latitude: returnLocation?.latitude ?? current.coords.latitude,
-        longitude: returnLocation?.longitude ?? current.coords.longitude,
-      });
-
-      setCommissionData({
-        address: returnAddress || "",
-        specification: "",
-        deliveryInstructions: "",
-        coordinates: {
-          latitude: returnLocation?.latitude ?? current.coords.latitude,
-          longitude: returnLocation?.longitude ?? current.coords.longitude,
-        },
-      });
-      setIsLoading(false);
     })();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  const fetchRoute = async (start: Coordinates, end: Coordinates) => {
-    try {
-      const url = `https://api.geoapify.com/v1/routing?waypoints=${start.latitude},${start.longitude}|${end.latitude},${end.longitude}&mode=drive&apiKey=${GEOAPIFY_KEY}`;
-      const res = await fetch(url);
-      const data = await res.json();
-
-      // Extract coordinates as { latitude, longitude } objects
-      const routeCoords = data.features[0].geometry.coordinates[0].map(
-        ([lon, lat]: [number, number]) => ({
-          latitude: lat,
-          longitude: lon,
-        })
-      );
-
-      return routeCoords;
-    } catch (error) {
-      console.error("Error fetching route:", error);
-      return [];
-    }
-  };
   const fetchAutocomplete = useCallback(
     async (text: string) => {
       if (text.length === 0) return setSearchResults(recentSearched.current);
@@ -194,8 +216,10 @@ const Orders: React.FC = () => {
 
   const handleAddressChange = useCallback(
     (text: string) => {
-      setCommissionData((prev) => ({ ...prev, address: text }));
+      // Update the store immediately
+      setCommissionData({ address: text });
 
+      // Debounce the autocomplete fetch
       if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
 
       debounceTimeout.current = setTimeout(() => {
@@ -206,7 +230,7 @@ const Orders: React.FC = () => {
         }
       }, 300);
     },
-    [fetchAutocomplete]
+    [fetchAutocomplete, setCommissionData] // ✅ include the store setter in deps
   );
 
   const navigation = useNavigation<any>();
@@ -260,15 +284,12 @@ const Orders: React.FC = () => {
                   borderRadius: 10,
                   marginBottom: 15,
                 }}
-                // Map centers initially on returnLocation (or fallback)
                 initialRegion={{
                   latitude:
-                    returnLocation?.latitude ??
-                    selectedPin?.latitude ??
+                    fullLocation?.returnLocation.latitude ??
                     deviceLocation.latitude,
                   longitude:
-                    returnLocation?.longitude ??
-                    selectedPin?.longitude ??
+                    fullLocation?.returnLocation.longitude ??
                     deviceLocation.longitude,
                   latitudeDelta: 0.01,
                   longitudeDelta: 0.01,
@@ -277,30 +298,11 @@ const Orders: React.FC = () => {
                 onPress={() =>
                   navigation.navigate("LocationPicker", {
                     returnAddress: commissionData.address,
-                    returnLocation: selectedPin ||
+                    returnLocation: fullLocation ||
                       deviceLocation || { latitude: 0, longitude: 0 },
                   })
                 }
-              >
-                {/* Fixed Marker — DOES NOT FOLLOW MAP */}
-                {returnLocation && (
-                  <Marker
-                    coordinate={returnLocation}
-                    title="Delivery / Pickup Location"
-                    description={returnAddress}
-                  />
-                )}
-                <Marker
-                  coordinate={courierLocation}
-                  title="Courier Location"
-                  description="Courier Location"
-                />
-                <Polyline
-                  coordinates={coordinates}
-                  strokeColor="#545EE1"
-                  strokeWidth={4}
-                />
-              </MapView>
+              ></MapView>
             )
           )}
           {/* Inputs */}
@@ -357,15 +359,16 @@ const Orders: React.FC = () => {
                   }
                   return (
                     <TouchableOpacity
-                      onPress={() =>
-                        navigation.navigate("LocationPicker", {
+                      onPress={() => {
+                        setFullLocation({
                           returnAddress: item.properties.formatted,
                           returnLocation: {
                             latitude: item.geometry.coordinates[1],
                             longitude: item.geometry.coordinates[0],
                           },
-                        })
-                      }
+                        });
+                        navigation.navigate("LocationPicker");
+                      }}
                       style={{
                         paddingVertical: 10,
                         paddingHorizontal: 12,
@@ -396,12 +399,7 @@ const Orders: React.FC = () => {
               placeholder="Order Specification"
               placeholderTextColor="#BFC5FF"
               value={commissionData.specification}
-              onChangeText={(val) =>
-                setCommissionData((prev) => ({
-                  ...prev,
-                  specification: val,
-                }))
-              }
+              onChangeText={(val) => setCommissionData({ specification: val })}
               style={{
                 backgroundColor: "white",
                 borderRadius: 8,
@@ -418,10 +416,7 @@ const Orders: React.FC = () => {
               placeholderTextColor="#BFC5FF"
               value={commissionData.deliveryInstructions}
               onChangeText={(val) =>
-                setCommissionData((prev) => ({
-                  ...prev,
-                  deliveryInstructions: val,
-                }))
+                setCommissionData({ deliveryInstructions: val })
               }
               style={{
                 backgroundColor: "white",

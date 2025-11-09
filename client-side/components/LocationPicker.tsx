@@ -12,15 +12,15 @@ import {
   Keyboard,
   Platform,
 } from "react-native";
-import MapView, { Marker, Region, Polyline } from "react-native-maps";
+import MapView, { Marker, Region, Polyline, LatLng } from "react-native-maps";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Coordinates, LocationPickerParams } from "@/types/interfaces";
 import { LocationPickerRouteProp } from "@/types/types";
 import BackButton from "./svg/BackButton";
-import { courierCoordinates } from "@/constants/courier_coordinate";
 import { GEOAPIFY_KEY } from "@env";
+import { useLocationStore } from "@/app/api/store/location_store";
 
 const screen = Dimensions.get("window");
 
@@ -29,44 +29,13 @@ export default function LocationPicker() {
   const mapRef = useRef<MapView>(null);
   const route = useRoute<LocationPickerRouteProp>();
   const params = route.params;
+  const { setFullLocation, fullLocation, setCommissionData, commissionData } =
+    useLocationStore();
 
   const [searchAddress, setSearchAddress] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [region, setRegion] = useState<Region | null>(null);
   const [loading, setLoading] = useState(true);
-  const [location, setLocation] = useState<LocationPickerParams>({
-    returnAddress: "",
-    returnLocation: { latitude: 0, longitude: 0 },
-  });
-  const [coordinates, setCoordinates] = useState<Coordinates[]>([]);
-
-  const courierLocation = courierCoordinates;
-  const prevLocation =
-    useRoute<LocationPickerRouteProp>().params.returnLocation;
-
-  const [newLocation, setNewLocation] = useState<Coordinates | null>(
-    prevLocation
-  );
-  const fetchRoute = async (start: Coordinates, end: Coordinates) => {
-    try {
-      const url = `https://api.geoapify.com/v1/routing?waypoints=${start.latitude},${start.longitude}|${end.latitude},${end.longitude}&mode=drive&apiKey=${GEOAPIFY_KEY}`;
-      const res = await fetch(url);
-      const data = await res.json();
-
-      // Extract coordinates as { latitude, longitude } objects
-      const routeCoords = data.features[0].geometry.coordinates[0].map(
-        ([lon, lat]: [number, number]) => ({
-          latitude: lat,
-          longitude: lon,
-        })
-      );
-
-      return routeCoords;
-    } catch (error) {
-      console.error("Error fetching route:", error);
-      return [];
-    }
-  };
 
   // --- Reverse Geocode ---
   const fetchAddress = useCallback(async (lat: number, lon: number) => {
@@ -81,7 +50,6 @@ export default function LocationPicker() {
     }
   }, []);
 
-  // --- Autocomplete ---
   const fetchAutocomplete = useCallback(
     async (text: string) => {
       if (!text.trim()) {
@@ -89,7 +57,10 @@ export default function LocationPicker() {
         return;
       }
 
-      const { latitude, longitude } = location.returnLocation;
+      if (!fullLocation?.returnLocation) return;
+
+      const { latitude, longitude } = fullLocation.returnLocation;
+
       const params = new URLSearchParams({
         text,
         apiKey: GEOAPIFY_KEY,
@@ -104,66 +75,82 @@ export default function LocationPicker() {
       const data = await res.json();
       setSearchResults(data.features || []);
     },
-    [location]
+    [fullLocation]
   );
 
   // --- Init map with location ---
   useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Permission Denied", "Location access is required.");
-        return;
-      }
+    let isMounted = true;
 
-      let latitude: number, longitude: number;
+    const init = async () => {
+      try {
+        // Only ask for permission if we actually need current GPS
+        if (!params?.returnLocation) {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert("Permission Denied", "Location access is required.");
+            return; // we'll handle loading in finally
+          }
+        }
 
-      if (params?.returnLocation) {
-        ({ latitude, longitude } = params.returnLocation);
-      } else {
-        const current = await Location.getCurrentPositionAsync({});
-        ({ latitude, longitude } = current.coords);
-      }
+        let latitude: number;
+        let longitude: number;
 
-      if (courierLocation && params?.returnLocation) {
-        (async () => {
-          const route = await fetchRoute(
-            courierLocation,
-            params.returnLocation
+        if (fullLocation?.returnLocation) {
+          ({ latitude, longitude } = fullLocation.returnLocation);
+          console.log(
+            "📍 Opening map at last pinned:",
+            fullLocation.returnLocation
           );
-          setCoordinates(route);
-        })();
+        } else {
+          const current = await Location.getCurrentPositionAsync({});
+          ({ latitude, longitude } = current.coords);
+          console.log(
+            "📍 Opening map at current device location:",
+            current.coords
+          );
+        }
+
+        // Reverse geocode
+        const address = await fetchAddress(latitude, longitude);
+
+        const newRegion: Region = {
+          latitude,
+          longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
+        if (isMounted) setRegion(newRegion);
+
+        if (isMounted) {
+          setFullLocation({
+            returnAddress: address,
+            returnLocation: { latitude, longitude },
+          });
+        }
+      } catch (err) {
+        console.error("Init location failed:", err);
+        Alert.alert("Error", "Unable to get your location right now.");
+      } finally {
+        if (isMounted) setLoading(false);
       }
-      const address = await fetchAddress(latitude, longitude);
-      const newRegion: Region = {
-        latitude,
-        longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
+    };
 
-      setRegion(newRegion);
-      setLocation({
-        returnAddress: address,
-        returnLocation: { latitude, longitude },
-      });
-      setLoading(false);
-    })();
-  }, [params]);
+    init();
+    return () => {
+      isMounted = false;
+    };
+  }, [params?.returnLocation, fetchAddress, setFullLocation]);
 
-  // --- Map movement handler ---
   const handleRegionChangeComplete = (newRegion: Region) => {
     setRegion(newRegion);
-    // Do NOT update location.returnLocation here
   };
 
-  // --- Handle typing in search ---
   const handleSearchChange = (text: string) => {
     setSearchAddress(text);
     fetchAutocomplete(text);
   };
 
-  // --- Handle selecting a place from autocomplete ---
   const handleSelectPlace = (item: any) => {
     const latitude = item.geometry.coordinates[1];
     const longitude = item.geometry.coordinates[0];
@@ -175,13 +162,14 @@ export default function LocationPicker() {
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     });
-    setLocation({
+
+    setFullLocation({
       returnAddress: formatted,
       returnLocation: { latitude, longitude },
     });
+
     setSearchAddress(formatted);
     setSearchResults([]);
-    setNewLocation({ latitude, longitude });
     Keyboard.dismiss();
   };
 
@@ -300,19 +288,9 @@ export default function LocationPicker() {
             showsUserLocation
           >
             <Marker
-              coordinate={location.returnLocation}
+              coordinate={fullLocation?.returnLocation as LatLng}
               title="Selected Location"
-              description={location.returnAddress}
-            />
-            <Marker
-              coordinate={courierLocation}
-              title="Courier Location"
-              description="Courier Location"
-            />
-            <Polyline
-              coordinates={coordinates}
-              strokeColor="#545EE1"
-              strokeWidth={4}
+              description={fullLocation?.returnAddress}
             />
           </MapView>
         )}
@@ -332,19 +310,21 @@ export default function LocationPicker() {
         {/* Continue Button */}
         <TouchableOpacity
           onPress={async () => {
-            // Only now do a reverse geocode to lock in the pin
             const address = await fetchAddress(
               region?.latitude as number,
               region?.longitude as number
             );
 
+            const newCoordinates: Coordinates = {
+              latitude: region?.latitude as number,
+              longitude: region?.longitude as number,
+            };
+            setFullLocation({
+              returnLocation: newCoordinates,
+              returnAddress: address,
+            });
             navigation.navigate("CustomerNavigationBar", {
               navPage: 0,
-              returnAddress: address,
-              returnLocation: {
-                latitude: region?.latitude as number,
-                longitude: region?.longitude as number,
-              },
             });
           }}
           style={{

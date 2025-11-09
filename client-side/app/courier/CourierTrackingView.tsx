@@ -4,7 +4,7 @@ import {
   CourierTrackingViewRouteProp,
 } from "@/types/types";
 import { useRoute, useNavigation } from "@react-navigation/native";
-import React, { useEffect, useRef, useState } from "react";
+import React, { act, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { orders } from "@/constants/orders"; // ✅ ensure this matches your import
-import { Order, UserOrder } from "@/types/interfaces";
+import { Coordinates, Order, UserOrder } from "@/types/interfaces";
 import DeliverProfileIcon from "@/components/svg/DeliverProfileIcon";
 import LocationVioletIcon from "@/components/svg/LocationVioletIcon";
 import { Button } from "@/components/Button";
@@ -24,8 +24,11 @@ import LocationBlueIcon from "@/components/svg/LocationBlueIcon";
 import PickIcon from "@/components/svg/PickIcon";
 import ConfirmPickupModal from "@/components/modals/ConfirmDeliver";
 import CancelDeliver from "@/components/modals/CancelDeliver";
-import { getOrderById } from "../api/orders";
+import { getCurrentOrderAsCourier, getOrderById } from "../api/orders";
 import { OrderResponseDTO } from "../api/dto/response/auth.response.dto";
+import * as Location from "expo-location";
+import { GEOAPIFY_KEY } from "@env";
+import { useCourierOrderStore } from "../api/store/courier_store";
 
 const { height } = Dimensions.get("window");
 
@@ -34,39 +37,69 @@ const CourierTrackingView = () => {
   const expandedHeight = height * 0.6;
   const animatedHeight = useRef(new Animated.Value(collapsedHeight)).current;
 
-  const [orderDetails, setOrderDetails] = useState<OrderResponseDTO | null>(
-    null
-  );
+  const { activeOrder, setActiveOrder } = useCourierOrderStore();
+
+  const [coordinates, setCoordinates] = useState<Coordinates[]>([]);
   const [expanded, setExpanded] = useState(false);
 
   const [showConfirm, setShowConfirm] = useState(false);
-
+  const [courierLocation, setCourierLocation] = useState<Coordinates>();
+  const [destinationLocation, setDestinationLocation] = useState<Coordinates>();
   const navigator = useNavigation<CourierTrackingViewNavProp>();
-  const route = useRoute<CourierTrackingViewRouteProp>();
-  const { orderId } = route.params;
 
-  const fetchOrderById = async () => {
+  const fetchRoute = async (start: Coordinates, end: Coordinates) => {
     try {
-      const order = await getOrderById(orderId);
-      setOrderDetails(order);
+      const url = `https://api.geoapify.com/v1/routing?waypoints=${start.latitude},${start.longitude}|${end.latitude},${end.longitude}&mode=drive&apiKey=${GEOAPIFY_KEY}`;
+      const res = await fetch(url);
+      const data = await res.json();
 
-      return order;
+      const routeCoords = data.features[0].geometry.coordinates[0].map(
+        ([lon, lat]: [number, number]) => ({
+          latitude: lat,
+          longitude: lon,
+        })
+      );
+
+      return routeCoords;
     } catch (error) {
-      console.error("Failed to fetch order:", error);
+      console.error("Error fetching route:", error);
+      return [];
     }
   };
-
   useEffect(() => {
-    (async () => {
-      const foundOrder = await fetchOrderById();
+    const init = async () => {
+      try {
+        let order = activeOrder;
+        // 2️⃣ Get courier GPS
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          console.warn("Permission to access location was denied");
+          return;
+        }
 
-      if (foundOrder) {
-        setOrderDetails(foundOrder);
+        const current = await Location.getCurrentPositionAsync({});
+        const courierCoords = {
+          latitude: current.coords.latitude,
+          longitude: current.coords.longitude,
+        };
+        setCourierLocation(courierCoords);
 
-        console.log("Fetched order details:", foundOrder);
+        // 3️⃣ Use latest order object (not stale activeOrder)
+        const destinationCoords: Coordinates = {
+          latitude: order?.deliveryDetailsDTO?.customerLatitude ?? 0,
+          longitude: order?.deliveryDetailsDTO?.customerLongitude ?? 0,
+        };
+        setDestinationLocation(destinationCoords);
+
+        const routeCoords = await fetchRoute(courierCoords, destinationCoords);
+        setCoordinates(routeCoords);
+      } catch (error) {
+        console.error("❌ Error initializing courier tracking:", error);
       }
-    })();
-  }, [orderId]);
+    };
+
+    init();
+  }, []);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -105,7 +138,7 @@ const CourierTrackingView = () => {
   ).current;
 
   // Early return for invalid orderId
-  if (!orderDetails) {
+  if (!activeOrder) {
     return (
       <View
         style={{
@@ -122,14 +155,7 @@ const CourierTrackingView = () => {
     );
   }
 
-  const courierLocation = { latitude: 10.2944, longitude: 123.8983 };
   const destination = { latitude: 10.2923, longitude: 123.8999 };
-  const routeCoords = [
-    { latitude: 10.2944, longitude: 123.8983 },
-    { latitude: 10.2948, longitude: 123.8987 },
-    { latitude: 10.2951, longitude: 123.8992 },
-    { latitude: 10.2923, longitude: 123.8999 },
-  ];
 
   const triggerConfirmPickup = () => {
     setShowConfirm(true);
@@ -181,14 +207,21 @@ const CourierTrackingView = () => {
       >
         <MapView
           style={{ flex: 1 }}
-          initialRegion={{
-            latitude: courierLocation.latitude,
-            longitude: courierLocation.longitude,
-            latitudeDelta: 0.002,
-            longitudeDelta: 0.002,
-          }}
+          region={
+            courierLocation
+              ? {
+                  latitude: courierLocation.latitude,
+                  longitude: courierLocation.longitude,
+                  latitudeDelta: 0.05,
+                  longitudeDelta: 0.05,
+                }
+              : undefined
+          }
         >
-          <Marker coordinate={courierLocation} title="Courier">
+          <Marker
+            coordinate={courierLocation ?? { latitude: 0, longitude: 0 }}
+            title="Courier"
+          >
             <Image
               source={require("@/assets/images/CourierMarkerPin.png")}
               style={{ width: 50, height: 50 }}
@@ -196,7 +229,10 @@ const CourierTrackingView = () => {
             />
           </Marker>
 
-          <Marker coordinate={destination} title="Destination">
+          <Marker
+            coordinate={destinationLocation ?? { latitude: 0, longitude: 0 }}
+            title="Destination"
+          >
             <Image
               source={require("@/assets/images/DestinationMarkerPin.png")}
               style={{ width: 40, height: 45 }}
@@ -205,7 +241,7 @@ const CourierTrackingView = () => {
           </Marker>
 
           <Polyline
-            coordinates={routeCoords}
+            coordinates={coordinates}
             strokeColor="#4A6CF7"
             strokeWidth={6}
           />
@@ -351,7 +387,7 @@ const CourierTrackingView = () => {
                       </View>
 
                       <Text style={{ color: "#555", marginLeft: 28 }}>
-                        static
+                        {activeOrder?.deliveryDetailsDTO?.destinationAddress}
                       </Text>
                     </View>
 
@@ -371,7 +407,7 @@ const CourierTrackingView = () => {
                         Order No.
                       </Text>
                       <Text style={{ color: "#555" }}>
-                        #{orderDetails.orderIdPK}
+                        #{activeOrder?.orderIdPK}
                       </Text>
                     </View>
                   </View>
@@ -386,7 +422,7 @@ const CourierTrackingView = () => {
                       gap: 10,
                     }}
                   >
-                    <Text>{orderDetails.request}</Text>
+                    <Text>{activeOrder?.request}</Text>
                   </View>
                 </View>
 
@@ -409,46 +445,13 @@ const CourierTrackingView = () => {
                       marginTop: 6,
                     }}
                   >
-                    <Text>{orderDetails.deliveryDetailsDTO.deliveryNotes}</Text>
+                    <Text>
+                      {activeOrder?.deliveryDetailsDTO?.deliveryNotes}
+                    </Text>
                   </View>
                 </View>
 
                 <View>
-                  <View style={{ flexDirection: "column", marginBottom: 10 }}>
-                    {/* Row: Icon + Label */}
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                      }}
-                    >
-                      <View style={{ marginRight: 8 }}>
-                        <LocationBlueIcon width={20} height={20} />
-                      </View>
-
-                      <Text
-                        style={{
-                          fontWeight: "700",
-                          fontSize: 18,
-                          paddingVertical: 5,
-                        }}
-                      >
-                        Delivery
-                      </Text>
-                    </View>
-
-                    {/* Delivery Location */}
-                    <Text
-                      style={{
-                        color: "#555",
-                        marginLeft: 28, // aligns text under label
-                        lineHeight: 20,
-                      }}
-                    >
-                      static
-                    </Text>
-                  </View>
-
                   <View
                     style={{
                       flexDirection: "row",
@@ -472,7 +475,7 @@ const CourierTrackingView = () => {
                       }}
                     >
                       <Text style={{ fontWeight: "600" }}>
-                        {orderDetails.paymentsResponseDTO.itemsFee}
+                        {activeOrder?.paymentsResponseDTO?.itemsFee}
                       </Text>
                     </View>
                   </View>
