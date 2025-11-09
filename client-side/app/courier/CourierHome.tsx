@@ -13,6 +13,7 @@ import SwitchIcon from "@/components/svg/SwitchIcon";
 import SwitchRole from "../../components/modals/SwitchRole";
 import { useNavigation } from "@react-navigation/native";
 import { changeRole } from "../api/user";
+import { useAuthStore } from "../api/store/auth_store";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -26,7 +27,13 @@ const CourierHome = () => {
 
   const switchRolePersist = async () => {
     try {
-      await changeRole();
+      console.log(`OLD TOKEN: ${useAuthStore.getState().token}`);
+
+      const { newToken } = await changeRole();
+      await useAuthStore.getState().refreshToken(newToken);
+
+      console.log(`NEW TOKEN: ${newToken}`);
+      console.log(`CURRENT TOKEN: ${useAuthStore.getState().token}`);
     } catch (error) {
       console.error("Error changing role:", error);
       // Handle error (e.g., show an error message)

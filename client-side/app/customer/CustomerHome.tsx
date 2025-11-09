@@ -27,7 +27,10 @@ const Home = () => {
   };
   const switchRolePersist = async () => {
     try {
-      await changeRole();
+      const { newToken } = await changeRole();
+      
+
+
     } catch (error) {
       console.error("Error changing role:", error);
       // Handle error (e.g., show an error message)

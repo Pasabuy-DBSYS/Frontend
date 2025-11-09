@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Button } from "@/components/Button";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { RootNav } from "@/types/types";
+import { Role, RootNav } from "@/types/types";
 import { Login } from "@/app/api/auth";
 import { useAuthStore } from "@/app/api/store/auth_store";
 
@@ -40,7 +40,13 @@ const LoginScreen = () => {
       await login(token);
 
       Alert.alert("✅ Success", "Logged in successfully!");
-      navigation.navigate("CustomerNavigationBar" as never);
+      const role = useAuthStore.getState().user?.currentRole;
+      const routeName =
+        role === Role.COURIER
+          ? "CourierNavigationBar"
+          : "CustomerNavigationBar";
+
+      navigation.navigate(routeName as never);
     } catch (error: any) {
       console.error("❌ Login failed:", error);
       Alert.alert("Login Failed", error.message || "Please try again.");
