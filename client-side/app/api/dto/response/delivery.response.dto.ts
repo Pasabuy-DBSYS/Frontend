@@ -9,6 +9,8 @@ export interface DeliveryDetailsResponseDTO {
   customerLatitude: number;
   customerLongitude: number;
   estimatedDeliveryTime: string; // DateTime → ISO string
+  destinationAddress: string;
+  customerAddress: string;
   actualDeliveryTime: string; // DateTime → ISO string
   actualPickupTime: string; // DateTime → ISO string
   deliveryNotes: string;

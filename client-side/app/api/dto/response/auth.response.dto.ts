@@ -1,7 +1,8 @@
 // api/dto/response/auth.response.dto.ts
 
 import { Role } from "@/types/types";
-
+import { DeliveryDetailsResponseDTO } from "./delivery.response.dto";
+import { PaymentsResponseDTO } from "./payment.response.dto";
 
 // ---------------------------------------------------------
 // ENUMS (mirror from PasabuyAPI.Enums)
@@ -67,8 +68,8 @@ export interface OrderResponseDTO {
   priority: number;
   created_at: string;
   updated_at: string;
-  deliveryDetailsDTO?: any;
-  paymentsResponseDTO?: any;
+  deliveryDetailsDTO?: DeliveryDetailsResponseDTO;
+  paymentsResponseDTO?: PaymentsResponseDTO;
 }
 
 export interface TokenResponseDTO {
