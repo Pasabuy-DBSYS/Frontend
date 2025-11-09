@@ -114,12 +114,19 @@ export const getCurrentProfile = async (): Promise<UserResponseDTO> => {
   }
 };
 
-export const changeRole = async (): Promise<UserResponseDTO> => {
+type ChangeRoleResponse = {
+  newToken: string;
+  user: UserResponseDTO;
+};
+
+export const changeRole = async (): Promise<ChangeRoleResponse> => {
   try {
     const { token, user } = useAuthStore.getState();
     if (!user) throw new Error("User not found in store.");
 
     let targetRole: Role;
+
+    console.log(`CURRENT ROLE: ${user.currentRole}`);
 
     switch (user.currentRole) {
       case Role.COURIER:
@@ -134,9 +141,11 @@ export const changeRole = async (): Promise<UserResponseDTO> => {
 
     console.log("🔁 Changing role to:", targetRole);
 
+    const changeRoleUrl = `${BASE_URL}/change/role/${targetRole}`;
+    console.log(changeRoleUrl);
     const response = await axios.patch(
-      `${BASE_URL}/change/role`,
-      targetRole,
+      changeRoleUrl,
+      {}, // no body
       {
         headers: {
           "Content-Type": "application/json",
@@ -152,7 +161,10 @@ export const changeRole = async (): Promise<UserResponseDTO> => {
 
     console.log("🧭 Refreshed user profile:", updatedUser);
 
-    return updatedUser;
+    return {
+      newToken: response.data,
+      user: updatedUser,
+    };
   } catch (err: any) {
     const status = err?.response?.status;
     const data = err?.response?.data;
