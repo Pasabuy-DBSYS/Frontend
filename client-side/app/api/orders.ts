@@ -1,5 +1,5 @@
 import axios from "axios";
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, RAW_URL } from "./config";
 import {
   AcceptOrderRequestDTO,
   PostOrderRequestDTO,
@@ -7,8 +7,13 @@ import {
 import { OrderResponseDTO } from "./dto/response/auth.response.dto";
 import { Status } from "./dto/response/order.response.dto";
 import { useAuthStore } from "./store/auth_store";
+import { GEOAPIFY_KEY } from "@env";
+import { Coordinates, Order } from "@/types/interfaces";
+import { convertCoordinatesToAddress } from "./geoapify";
+import * as SignalR from "@microsoft/signalr";
 
 const BASE_URL = `${API_BASE_URL}/Orders`;
+let connection: SignalR.HubConnection | null = null;
 
 export const getOrders = async (): Promise<any> => {
   try {
@@ -106,19 +111,23 @@ export const postOrder = async (
   const token = useAuthStore.getState().token;
 
   try {
-    const payload = {
+    const payload: PostOrderRequestDTO = {
       customerId: orderRequestDTO.customerId,
       request: orderRequestDTO.request,
       tipFee: orderRequestDTO.tipFee ?? 0,
-      status: 0, // ✅ send string, not number
-      priority: 0,
+      status: orderRequestDTO.status,
+      priority: orderRequestDTO.priority ?? 0,
       locationLatitude: orderRequestDTO.locationLatitude,
       locationLongitude: orderRequestDTO.locationLongitude,
       customerLatitude: orderRequestDTO.customerLatitude,
       customerLongitude: orderRequestDTO.customerLongitude,
-      deliveryDistance: orderRequestDTO.deliveryDistance,
-      deliveryNotes: orderRequestDTO.deliveryNotes,
+      deliveryDistance: orderRequestDTO.deliveryDistance ?? 0,
+      customerAddress: orderRequestDTO.customerAddress,
+      destinationAddress: orderRequestDTO.destinationAddress,
+      deliveryNotes: orderRequestDTO.deliveryNotes ?? "",
     };
+
+    console.log(`PAYLOAD: ${JSON.stringify(payload)}`);
 
     Object.entries(payload).forEach(([key, value]) => {
       console.log(`${key}: ${value}`);
@@ -131,7 +140,7 @@ export const postOrder = async (
       },
     });
 
-    return response.data;
+    response.data;
   } catch (err: any) {
     const apiError = err.response?.data;
 
@@ -181,6 +190,81 @@ export const acceptOrderById = async (
       data,
       timestamp: new Date().toISOString(),
     });
+    throw err;
+  }
+};
+
+export const fetchOrderRealtime = async (
+  onCreated: (order: OrderResponseDTO) => void,
+  onUpdated?: (order: OrderResponseDTO) => void
+): Promise<void> => {
+  try {
+    const token = useAuthStore.getState().token;
+
+    // Prevent multiple connections
+    if (
+      connection &&
+      connection.state === SignalR.HubConnectionState.Connected
+    ) {
+      console.log("🟢 SignalR already connected");
+      return;
+    }
+
+    connection = new SignalR.HubConnectionBuilder()
+      .withUrl(`${API_BASE_URL}/hubs/ordersHub`, {
+        accessTokenFactory: () => token ?? "",
+      })
+      .withAutomaticReconnect()
+      .configureLogging(SignalR.LogLevel.Information)
+      .build();
+
+    connection.on("OrderCreated", (newOrder: OrderResponseDTO) => {
+      console.log("📦 Real-time order created:", newOrder);
+      onCreated(newOrder);
+    });
+
+    if (onUpdated) {
+      connection.on("OrderUpdated", (updatedOrder: OrderResponseDTO) => {
+        console.log("♻️ Real-time order updated:", updatedOrder);
+        onUpdated(updatedOrder);
+      });
+    }
+
+    connection.onreconnecting(() =>
+      console.log("🔄 Reconnecting to SignalR...")
+    );
+    connection.onreconnected(() => console.log("✅ Reconnected to SignalR"));
+
+    await connection.start();
+    console.log("✅ SignalR connection established");
+  } catch (err) {
+    console.error("❌ SignalR connection failed:", err);
+  }
+};
+
+export const stopOrderRealtime = async () => {
+  if (connection) {
+    await connection.stop();
+    console.log("🛑 SignalR connection stopped");
+  }
+};
+
+export const getCurrentOrderAsCourier = async (): Promise<OrderResponseDTO> => {
+  try {
+    const token = useAuthStore.getState().token;
+
+    const response = await axios.get<OrderResponseDTO>(`${BASE_URL}/courier`, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    console.log(`RESPONSE: ${JSON.stringify(response)}`);
+
+    return response.data;
+  } catch (err) {
+    console.log(err); 
     throw err;
   }
 };
