@@ -4,9 +4,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/components/Button"; // adjust path as needed
 import ProfileButtons from "@/components/ProfileButtons";
-import { user } from "@/constants/user";
+import { useAuthStore } from "@/app/api/store/auth_store";
+import { UserResponseDTO } from "@/app/api/dto/response/auth.response.dto";
 
 const Profile = () => {
+  const { user } = useAuthStore();
+
   return (
     <LinearGradient
       colors={["#545EE1", "#FFFFFF"]}
@@ -41,7 +44,7 @@ const Profile = () => {
       <View style={{ alignItems: "center", marginTop: 30 }}>
         <Image
           source={{
-            uri: `${user.imageUrl}`,
+            uri: `https://static0.gamerantimages.com/wordpress/wp-content/uploads/2025/08/naruto-new-anime-2025-announcement.jpg?w=1600&h=1200&fit=crop`,
           }}
           style={{
             width: 100,
@@ -52,16 +55,16 @@ const Profile = () => {
           }}
         />
         <Text style={{ fontSize: 20, fontWeight: "bold", color: "#000" }}>
-          {user.firstName} {user.lastName}
+          {user?.firstName} {user?.lastName}
         </Text>
         <Text style={{ fontSize: 14, color: "#444", marginTop: 3 }}>
-          {user.emailAddress}
+          {user?.email}
         </Text>
         <Text style={{ fontSize: 14, color: "#444", marginTop: 2 }}>
-          +61 999 9999 9999
+          +63{user?.phone.substring(1, user.phone.length - 1)}
         </Text>
       </View>
-      <ProfileButtons user={user} />
+      <ProfileButtons user={user as UserResponseDTO} />
     </LinearGradient>
   );
 };

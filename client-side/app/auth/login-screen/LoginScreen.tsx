@@ -8,18 +8,51 @@ import {
   Pressable,
   TouchableWithoutFeedback,
   Keyboard,
+  Alert,
 } from "react-native";
 import { Button } from "@/components/Button";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Role, RootNav } from "@/types/types";
+import { Login } from "@/app/api/auth";
+import { useAuthStore } from "@/app/api/store/auth_store";
 
 const LoginScreen = () => {
-  const navigation = useNavigation();
-  const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
-  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const navigation = useNavigation<RootNav>();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    navigation.navigate("CourierNavigationBar" as never);
+  const { login, logout } = useAuthStore();
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert("Missing Fields", "Please enter your email and password.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // 🔹 Call API to get token
+      const token = await Login({ username: email, password });
+
+      // 🔹 Save token & user profile
+      await login(token);
+
+      Alert.alert("✅ Success", "Logged in successfully!");
+      const role = useAuthStore.getState().user?.currentRole;
+      const routeName =
+        role === Role.COURIER
+          ? "CourierNavigationBar"
+          : "CustomerNavigationBar";
+
+      navigation.navigate(routeName as never);
+    } catch (error: any) {
+      console.error("❌ Login failed:", error);
+      Alert.alert("Login Failed", error.message || "Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleForgotPassword = () => {
@@ -27,7 +60,7 @@ const LoginScreen = () => {
   };
 
   const handleRegister = () => {
-    navigation.navigate("PhoneNumber" as never);
+    navigation.navigate("RegisterFlow", { screen: "PhoneNumber" } as never);
   };
 
   return (
@@ -42,12 +75,11 @@ const LoginScreen = () => {
 
         {/* Content */}
         <View style={{ flex: 1, paddingHorizontal: 30, marginTop: 30 }}>
-          {/* Title */}
           <Text style={{ fontSize: 24, fontWeight: "600", color: "#000" }}>
-            Enter you details to login
+            Enter your details to login
           </Text>
           <Text style={{ fontSize: 14, color: "#666", marginTop: 8 }}>
-            Fill the information below.
+            Fill in the information below.
           </Text>
 
           {/* Email Input */}
@@ -58,9 +90,9 @@ const LoginScreen = () => {
             <TextInput
               value={email}
               onChangeText={setEmail}
-              placeholder=""
               keyboardType="email-address"
               autoCapitalize="none"
+              placeholder="your@email.com"
               style={{
                 borderWidth: 1,
                 borderColor: "#545EE1",
@@ -80,7 +112,7 @@ const LoginScreen = () => {
               <TextInput
                 value={password}
                 onChangeText={setPassword}
-                placeholder=""
+                placeholder="••••••••"
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 style={{
@@ -115,7 +147,7 @@ const LoginScreen = () => {
           {/* Login Button */}
           <View style={{ marginTop: 70 }}>
             <Button
-              title="Log in"
+              title={loading ? "Logging in..." : "Log in"}
               onPress={handleLogin}
               backgroundColor="#5B5FED"
               textColor="#FFFFFF"
@@ -123,6 +155,7 @@ const LoginScreen = () => {
               borderRadius={30}
               fontSize={16}
               fontWeight="600"
+              disabled={loading}
             />
           </View>
 
@@ -141,7 +174,7 @@ const LoginScreen = () => {
           </Pressable>
         </View>
 
-        {/* Register Link Footer */}
+        {/* Register Footer */}
         <View
           style={{
             paddingHorizontal: 30,

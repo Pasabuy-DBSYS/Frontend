@@ -7,11 +7,12 @@ import LoginMan from "@/components/svg/LoginMan";
 import CreateAccountArrow from "@/components/svg/CreateAccountArrow";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { useNavigation } from "@react-navigation/native";
+import { RootNav } from "@/types/types";
 
 const { width, height } = Dimensions.get("window");
 
 const Welcome = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<RootNav>();
   return (
     <LinearGradient
       colors={["#545EE1", "#FFFFFF"]}
@@ -60,7 +61,7 @@ const Welcome = () => {
           <Button
             title="Create new account"
             onPress={() => {
-              navigation.navigate("PhoneNumber" as never);
+              navigation.navigate("RegisterFlow", { screen: "PhoneNumber" });
             }}
             backgroundColor="#545EE1"
             textColor="#fff"

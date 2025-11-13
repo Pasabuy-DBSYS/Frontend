@@ -1,7 +1,7 @@
 import { DimensionValue } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
-import { Coordinates, LocationPickerParams } from "./interfaces";
+import { Coordinates, LocationPickerParams, Order } from "./interfaces";
 
 export type ButtonProps = {
   title: string;
@@ -18,7 +18,17 @@ export type ButtonProps = {
   width?: DimensionValue; // FIXED
   height?: DimensionValue; // FIXED
   marginTop?: number;
+  marginBottom?: number;
 };
+export enum Role {
+  COURIER = 1,
+  CUSTOMER = 0,
+}
+export enum VerificationInfoStatus {
+  PENDING,
+  ACCEPTED,
+  REJECTED,
+}
 
 export type DeliveryStatusType =
   | "Delivered"
@@ -47,9 +57,25 @@ export type AuthLeftButtonProps = {
   color?: string;
 };
 
+export type RegisterStackParamList = {
+  AddNameScreen: undefined;
+  PhoneNumber: undefined;
+  VerifyPhoneNumber: undefined;
+  VerifyEmailAddress: undefined;
+  PersonalInformation: undefined;
+  StudentIdVerify: undefined;
+  InsuranceVerification: undefined;
+  VeryifyingAccount: undefined;
+  ApplicationSuccessful: undefined;
+};
+
 export type RootStackParamList = {
   GetStarted: undefined;
   Welcome: undefined;
+
+  RegisterFlow: { screen?: keyof RegisterStackParamList } | undefined;
+
+  CustomerNavigationBar: undefined;
   PhoneNumber: undefined;
   VerifyPhoneNumber: undefined;
   VerifyEmailAddress: undefined;
@@ -57,25 +83,52 @@ export type RootStackParamList = {
   StudentIdVerify: undefined;
   InsuranceVerification: undefined;
   ApplicationSuccessful: undefined;
+
   LoginScreen: undefined;
   ForgotPasswordScreen: undefined;
   VerifyEmail: undefined;
   AddNameScreen: undefined;
   VeryifyingAccount: undefined;
+
   CourierNavigationBar: undefined;
   Home: undefined;
+  CourierTrackingView: { orderId: number };
   Orders:
     | {
         returnAddress: string;
         returnLocation: Coordinates;
       }
-    | undefined; // allow it to be optional  LocationPicker: undefined;
+    | undefined;
   LocationPicker: {
     returnAddress: string;
     returnLocation: Coordinates;
   };
+  OrderHistory: { mode: HistoryMode } | undefined;
+  MessagePage: undefined;
+  CustomerTrackingView: undefined;
 };
 
+export type RootNav = NativeStackNavigationProp<RootStackParamList>;
+
+export type CourierTrackingViewNavProp = NativeStackNavigationProp<
+  RootStackParamList,
+  "CourierTrackingView"
+>;
+
+export type CourierTrackingViewRouteProp = RouteProp<
+  RootStackParamList,
+  "CourierTrackingView"
+>;
+
+export type CustomerTrackingViewNavProp = NativeStackNavigationProp<
+  RootStackParamList,
+  "CustomerTrackingView"
+>;
+
+export type CustomerTrackingViewRouteProp = RouteProp<
+  RootStackParamList,
+  "CustomerTrackingView"
+>;
 export type LocationPickerNavProp =
   NativeStackNavigationProp<RootStackParamList>;
 
@@ -84,9 +137,24 @@ export type OrdersNavProp = NativeStackNavigationProp<
   "Orders"
 >;
 
+export type MessagePageNavProp = NativeStackNavigationProp<RootStackParamList>;
+export type MessageRoute = RouteProp<RootStackParamList, "MessagePage">;
+
 export type OrdersRouteProp = RouteProp<RootStackParamList, "Orders">;
 
 export type LocationPickerRouteProp = RouteProp<
   RootStackParamList,
   "LocationPicker"
 >;
+
+export type ConfirmDeliverProps = {
+  visible: boolean;
+  title?: string;
+  message?: string;
+  confirmText?: string; // optional override
+  cancelText?: string; // optional override
+  onConfirm: () => void;
+  onCancel: () => void;
+};
+
+export type LogoutRoutePrope = RouteProp<RootStackParamList, "LoginScreen">;

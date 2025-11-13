@@ -1,20 +1,23 @@
-import React, { useState } from "react";
-import { Modal, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { UserResponseDTO } from "@/app/api/dto/response/auth.response.dto";
+import { useAuthStore } from "@/app/api/store/auth_store";
 import { Button } from "@/components/Button"; // adjust import path
-import UpdateInsuranceIcon from "./svg/UpdateInsuranceIcon";
-import NextArrowIcon from "./svg/NextArrowIcon";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { User } from "@/types/interfaces";
+import React, { useState } from "react";
+import { View } from "react-native";
 import ConfirmLogout from "./modals/ConfirmLogout";
+import NextArrowIcon from "./svg/NextArrowIcon";
+import UpdateInsuranceIcon from "./svg/UpdateInsuranceIcon";
 
 type ProfileProp = {
-  user: User;
+  users: UserResponseDTO;
 };
 
-const ProfileButtons = ({ user }: ProfileProp) => {
+const ProfileButtons = ({ users }: ProfileProp) => {
   const navigation = useNavigation<any>();
   const [logoutModal, setLogoutModal] = useState<boolean>(false);
+
+  const { logout, user } = useAuthStore();
 
   return (
     <View style={{ marginTop: 40, gap: 30 }}>
@@ -183,11 +186,12 @@ const ProfileButtons = ({ user }: ProfileProp) => {
           onCancel={() => {
             setLogoutModal(false);
           }}
-          onConfirm={() => {
+          onConfirm={async () => {
             setLogoutModal(false);
+            await logout();
             navigation.reset({
               index: 0,
-              routes: [{ name: "Login" as never }],
+              routes: [{ name: "Welcome" as never }],
             });
           }}
         />

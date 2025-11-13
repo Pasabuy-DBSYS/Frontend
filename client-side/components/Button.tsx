@@ -35,6 +35,7 @@ export const Button = ({
         alignItems: showArrow ? "center" : "center",
         opacity: disabled ? 0.5 : 1,
         marginTop: props.marginTop,
+        marginBottom: props.marginBottom,
       }}
     >
       <Text

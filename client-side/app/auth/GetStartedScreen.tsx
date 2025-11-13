@@ -1,11 +1,22 @@
-import { Text, View, Image, Dimensions } from "react-native";
-import { Button } from "../../components/Button";
-import { useNavigation } from "@react-navigation/native";
 import StandingMan from "@/components/svg/StandingMan";
+import { useNavigation } from "@react-navigation/native";
+import { Dimensions, Text, View } from "react-native";
+import { Button } from "../../components/Button";
+import { getOrders } from "../api/orders";
 
 const GetStartedScreen = () => {
   const { width, height } = Dimensions.get("window");
   const navigation = useNavigation();
+
+  const fetchOrders = async () => {
+    try {
+      const orders = await getOrders();
+      console.log("Fetched Orders:", orders);
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      throw error;
+    }
+  };
 
   return (
     <View
@@ -61,6 +72,7 @@ const GetStartedScreen = () => {
           <Button
             title="Get Started"
             onPress={() => {
+              fetchOrders();
               navigation.navigate("Welcome" as never);
             }}
             backgroundColor="#fff"

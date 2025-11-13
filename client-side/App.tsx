@@ -1,79 +1,130 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
+import { ActivityIndicator, Settings, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import GetStartedScreen from "./app/auth/GetStartedScreen";
 import Welcome from "./app/auth/Welcome";
-import PhoneNumberPage from "./app/auth/register-screen/PhoneNumberPage";
-import VerifyPhoneNumber from "./app/auth/register-screen/VerifyPhoneNumber";
-import VerifyEmailAdress from "./app/auth/register-screen/VerifyEmailAdress";
-import PersonalInformation from "./app/auth/register-screen/PersonalInformation";
-import StudentIdVerify from "./app/auth/register-screen/StudentIdVerify";
-import InsuranceVerification from "./app/auth/register-screen/InsuranceVerification";
-import ApplicationSuccessful from "./app/auth/register-screen/ApplicationSuccessful";
 import LoginScreen from "./app/auth/login-screen/LoginScreen";
 import ForgotPasswordScreen from "./app/auth/login-screen/ForgotPasswordScreen";
 import VerifyEmail from "./app/auth/login-screen/VerifyEmail";
-import AddNameScreen from "./app/auth/register-screen/AddNameScreen";
-import VeryifyingAccount from "./app/auth/register-screen/VeryifyingAccount";
-import NavigationBar from "./components/CourierNavigationBar";
-import Home from "./app/courier/Home";
-import Orders from "./app/customer/Orders";
-import CourierNavigationBar from "./components/CourierNavigationBar";
-import LocationPicker from "./components/LocationPicker";
-import OrderHistory from "./app/customer/OrderHistory";
-import Settings from "./components/Settings";
+import CustomerNavigationBar from "./app/customer/CustomerNavigationBar";
+import CourierNavigationBar from "./app/courier/CourierNavigationBar";
+import RegisterStack from "./app/auth/RegisterStack";
 import ChangePassword from "./app/auth/ChangePassword";
+import { useAuthStore } from "./app/api/store/auth_store";
+import { Role } from "./types/types";
+import LocationPicker from "./components/LocationPicker";
+import Orders from "./app/customer/Orders";
+import OrderHistory from "./app/customer/OrderHistory";
+import CourierTrackingView from "./app/courier/CourierTrackingView";
+import OrderList from "./app/courier/OrderList";
+import CourierHome from "./app/courier/CourierHome";
+import MessagePage from "./components/MessagePage";
+import CustomerTrackingView from "./app/customer/CustomerTrackingView";
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  const { token, user, checkTokenValidity, refreshUser } = useAuthStore();
+  const [initialRoute, setInitialRoute] = useState<string | null>(null);
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const hasVisited = await AsyncStorage.getItem("hasVisited");
+
+        // 🔹 First-time launch or after clear cache
+        if (!hasVisited) {
+          await AsyncStorage.setItem("hasVisited", "true");
+          setInitialRoute("GetStarted");
+          return;
+        }
+
+        // 🔹 Returning user
+        const valid = checkTokenValidity();
+        if (!valid) {
+          setInitialRoute("Welcome"); // or "LoginScreen"
+          return;
+        }
+
+        // 🔹 Token valid: refresh user profile and route by role
+        await refreshUser();
+        const updatedUser = useAuthStore.getState().user;
+
+        if (updatedUser?.currentRole === Role.COURIER) {
+          setInitialRoute("CourierNavigationBar");
+        } else if (updatedUser?.currentRole === Role.CUSTOMER) {
+          setInitialRoute("CustomerNavigationBar");
+        } else {
+          setInitialRoute("Welcome");
+        }
+      } catch (err) {
+        console.error("App init failed:", err);
+        setInitialRoute("GetStarted");
+      }
+    };
+
+    init();
+  }, [token]);
+
+  if (!initialRoute) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#fff",
+        }}
+      >
+        <ActivityIndicator size="large" color="#545EE1" />
+      </View>
+    );
+  }
+
   return (
     <NavigationContainer>
       <StatusBar style="light" backgroundColor="#545EE1" />
       <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-        }}
-        initialRouteName="CourierNavigationBar"
+        screenOptions={{ headerShown: false }}
+        initialRouteName={initialRoute}
       >
         <Stack.Screen name="GetStarted" component={GetStartedScreen} />
         <Stack.Screen name="Welcome" component={Welcome} />
-        <Stack.Screen name="PhoneNumber" component={PhoneNumberPage} />
-        <Stack.Screen name="VerifyPhoneNumber" component={VerifyPhoneNumber} />
-        <Stack.Screen name="VerifyEmailAddress" component={VerifyEmailAdress} />
-        <Stack.Screen
-          name="PersonalInformation"
-          component={PersonalInformation}
-        />
-        <Stack.Screen name="StudentIdVerify" component={StudentIdVerify} />
-        <Stack.Screen
-          name="InsuranceVerification"
-          component={InsuranceVerification}
-        />
-
-        <Stack.Screen
-          name="ApplicationSuccessful"
-          component={ApplicationSuccessful}
-        />
+        <Stack.Screen name="RegisterFlow" component={RegisterStack} />
         <Stack.Screen name="LoginScreen" component={LoginScreen} />
         <Stack.Screen
           name="ForgotPasswordScreen"
           component={ForgotPasswordScreen}
         />
         <Stack.Screen name="VerifyEmail" component={VerifyEmail} />
-        <Stack.Screen name="AddNameScreen" component={AddNameScreen} />
-        <Stack.Screen name="VeryifyingAccount" component={VeryifyingAccount} />
+        <Stack.Screen name="ChangePassword" component={ChangePassword} />
+        <Stack.Screen
+          name="CustomerNavigationBar"
+          component={CustomerNavigationBar}
+        />
         <Stack.Screen
           name="CourierNavigationBar"
           component={CourierNavigationBar}
         />
-        <Stack.Screen name="Home" component={Home} />
+
         <Stack.Screen name="Orders" component={Orders} />
         <Stack.Screen name="LocationPicker" component={LocationPicker} />
         <Stack.Screen name="OrderHistory" component={OrderHistory} />
-        <Stack.Screen name="Settings" component={Settings}></Stack.Screen>
-        <Stack.Screen name="ChangePassword" component={ChangePassword} />
+        <Stack.Screen name="CourierHome" component={CourierHome} />
+        <Stack.Screen name="OrderList" component={OrderList} />
+        <Stack.Screen
+          name="CourierTrackingView"
+          component={CourierTrackingView}
+        />
+        <Stack.Screen name="MessagePage" component={MessagePage}></Stack.Screen>
+        <Stack.Screen
+          name="CustomerTrackingView"
+          component={CustomerTrackingView}
+        ></Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>
   );

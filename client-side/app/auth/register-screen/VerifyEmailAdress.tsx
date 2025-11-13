@@ -10,10 +10,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { Button } from "@/components/Button";
 import AuthLeftButton from "@/components/svg/AuthLeftButton";
+import { useRegister } from "@/app/context/RegisterContext";
+import { RootNav } from "@/types/types";
 
 const VerifyEmailAdress: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<RootNav>();
   const [email, setEmail] = useState<string>("");
+  const { updateUserData } = useRegister();
+
+  const handleContinue = () => {
+    updateUserData({ email: email.trim() });
+    navigation.navigate("PersonalInformation");
+  };
 
   const handleInput = (value: string): void => {
     setEmail(value);
@@ -62,10 +70,7 @@ const VerifyEmailAdress: React.FC = () => {
         {/* Verify Button */}
         <Button
           title="Continue"
-          onPress={() => {
-            handleInput(email);
-            navigation.navigate("StudentIdVerify" as never);
-          }}
+          onPress={() => handleContinue()}
           backgroundColor="#545EE1"
           textColor="#fff"
           borderColor="#545EE1"

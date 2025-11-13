@@ -4,11 +4,17 @@ import AuthLeftButton from "@/components/svg/AuthLeftButton";
 import { useNavigation } from "@react-navigation/native";
 import { View, Text, Keyboard, TouchableWithoutFeedback } from "react-native";
 import { useState } from "react";
+import { useRegister } from "@/app/context/RegisterContext";
 
 const PhoneNumberPage = () => {
   const navigation = useNavigation();
   const [phoneNumber, setPhoneNumber] = useState("");
+  const { updateUserData } = useRegister();
 
+  const handleContinue = () => {
+    updateUserData({ phone: phoneNumber.trim() });
+    navigation.navigate("VerifyPhoneNumber" as never);
+  };
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <View
@@ -44,9 +50,7 @@ const PhoneNumberPage = () => {
         <View style={{ marginTop: 55 }}>
           <Button
             title="Continue"
-            onPress={() => {
-              navigation.navigate("VerifyPhoneNumber" as never);
-            }}
+            onPress={() => handleContinue()}
             backgroundColor="#545EE1"
             textColor="#fff"
             borderColor="#545EE1"

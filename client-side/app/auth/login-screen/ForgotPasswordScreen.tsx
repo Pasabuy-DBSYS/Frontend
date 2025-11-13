@@ -87,7 +87,7 @@ const ForgotPasswordScreen = () => {
           }}
         >
           <Text style={{ fontSize: 16, color: "#666", fontWeight: "600" }}>
-            Remember password?{" "}
+            Remember password?
           </Text>
           <Pressable onPress={handleLogIn}>
             <Text style={{ fontSize: 16, color: "#5B5FED", fontWeight: "600" }}>

@@ -92,14 +92,16 @@ export interface LocationPickerParams {
 
 export interface Order {
   orderId: number;
+  user: UserOrder;
   orderStatus: DeliveryStatusType;
   orderTime: Date;
-  formattedTime: string;
+  formattedTime: string | undefined;
   locationBought: string;
   specification: string;
   instructions: string;
   placeDelivered: string;
   fee: number;
+  location?: Coordinates;
 }
 
 export interface User {
@@ -111,6 +113,12 @@ export interface User {
   dateOfBirth: Date;
   emailAddress: string;
   password: string;
+}
+
+export interface UserOrder {
+  firstName: string;
+  lastName: string;
+  middleName: string | null;
 }
 
 export { Coordinates, CommissionData };

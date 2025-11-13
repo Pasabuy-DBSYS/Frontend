@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -9,11 +9,37 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import SwitchIcon from "@/components/svg/couriers/SwitchIcon";
+import SwitchIcon from "@/components/svg/SwitchIcon";
+import SwitchRole from "../../components/modals/SwitchRole";
+import { useNavigation } from "@react-navigation/native";
+import { changeRole } from "../api/user";
+import { useAuthStore } from "../api/store/auth_store";
 
 const screenWidth = Dimensions.get("window").width;
 
-const Home = () => {
+const CourierHome = () => {
+  const [toggleModal, setToggleModal] = useState<boolean>(false);
+  const navigator = useNavigation();
+
+  const switchRole = () => {
+    setToggleModal(true);
+  };
+
+  const switchRolePersist = async () => {
+    try {
+      console.log(`OLD TOKEN: ${useAuthStore.getState().token}`);
+
+      const { newToken } = await changeRole();
+      await useAuthStore.getState().refreshToken(newToken);
+
+      console.log(`NEW TOKEN: ${newToken}`);
+      console.log(`CURRENT TOKEN: ${useAuthStore.getState().token}`);
+    } catch (error) {
+      console.error("Error changing role:", error);
+      // Handle error (e.g., show an error message)
+    }
+  };
+
   return (
     <LinearGradient
       colors={["#545EE1", "#FFFFFF"]}
@@ -87,6 +113,7 @@ const Home = () => {
                 borderRadius: 10,
                 marginTop: 15,
               }}
+              onPress={switchRole}
             >
               <Text
                 style={{
@@ -94,7 +121,7 @@ const Home = () => {
                   fontWeight: "600",
                 }}
               >
-                Commissioner
+                Courier
               </Text>
             </TouchableOpacity>
             <View style={{ marginTop: "3%" }}>
@@ -103,6 +130,18 @@ const Home = () => {
           </View>
         </View>
 
+        <SwitchRole
+          isVisible={toggleModal}
+          onClose={() => setToggleModal(false)}
+          onConfirm={() => {
+            setToggleModal(false);
+            switchRolePersist();
+            navigator.reset({
+              index: 0,
+              routes: [{ name: "CustomerNavigationBar" as never }],
+            });
+          }}
+        />
         {/* Dashboard */}
         <View style={{ marginTop: 30 }}>
           <View
@@ -130,7 +169,7 @@ const Home = () => {
                   marginBottom: 10,
                 }}
               >
-                Total Deliveries
+                Total Orders
               </Text>
               <Text
                 style={{
@@ -160,7 +199,7 @@ const Home = () => {
                   marginBottom: 10,
                 }}
               >
-                Total Earnings
+                Total Money Spent
               </Text>
               <Text
                 style={{
@@ -200,7 +239,7 @@ const Home = () => {
                   marginBottom: 10,
                 }}
               >
-                Total Complaints
+                Average Spent
               </Text>
               <Text
                 style={{
@@ -268,7 +307,7 @@ const Home = () => {
                   marginBottom: 10,
                 }}
               >
-                Average Time
+                Total Complaint
               </Text>
               <Text
                 style={{
@@ -287,4 +326,4 @@ const Home = () => {
   );
 };
 
-export default Home;
+export default CourierHome;

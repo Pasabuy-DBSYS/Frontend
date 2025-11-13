@@ -5,6 +5,8 @@ import Camera from "@/components/svg/Camera";
 import { Button } from "@/components/Button";
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
+import { useRegister } from "@/app/context/RegisterContext";
+import { RNFile } from "@/app/api/dto/request/auth.request.dto";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -12,6 +14,7 @@ const StudentIdVerify = () => {
   const navigation = useNavigation<any>();
   const [frontPhoto, setFrontPhoto] = useState<string | null>(null);
   const [backPhoto, setBackPhoto] = useState<string | null>(null);
+  const { userData, updateUserData } = useRegister(); // ✅ Access context
 
   const getFileName = (uri: string) => {
     return uri.split("/").pop() || "image.jpg";
@@ -31,8 +34,21 @@ const StudentIdVerify = () => {
     });
 
     if (!result.canceled) {
-      if (type === "front") setFrontPhoto(result.assets[0].uri);
-      else setBackPhoto(result.assets[0].uri);
+      const image = result.assets[0];
+
+      const fileObj = {
+        uri: image.uri,
+        name: image.fileName || `${type}_id.jpg`,
+        type: image.type || "image/jpeg",
+      };
+
+      if (type === "front") {
+        setFrontPhoto(image.uri);
+        updateUserData({ frontId: fileObj });
+      } else {
+        setBackPhoto(image.uri);
+        updateUserData({ backId: fileObj });
+      }
     }
   };
 
@@ -51,8 +67,21 @@ const StudentIdVerify = () => {
     });
 
     if (!result.canceled) {
-      if (type === "front") setFrontPhoto(result.assets[0].uri);
-      else setBackPhoto(result.assets[0].uri);
+      const image = result.assets[0];
+      const fileObj: RNFile = {
+        uri: image.uri,
+        name: image.fileName ?? "",
+        type: `image/png`,
+      };
+
+      if (type === "front") {
+        setFrontPhoto(image.uri);
+        updateUserData({ frontId: fileObj });
+        console.log(`URI Front: ${userData.frontId}`);
+      } else {
+        setBackPhoto(image.uri);
+        updateUserData({ backId: fileObj });
+      }
     }
   };
 
@@ -207,6 +236,20 @@ const StudentIdVerify = () => {
     </View>
   );
 
+  const handleNext = async () => {
+    if (!frontPhoto || !backPhoto) {
+      Alert.alert(
+        "Missing Photos",
+        "Please upload both front and back photos."
+      );
+      return;
+    }
+
+    navigation.navigate("InsuranceVerification" as never, {
+      title: "Insurance Verification",
+    });
+  };
+
   return (
     <View
       style={{
@@ -278,16 +321,7 @@ const StudentIdVerify = () => {
           margin={0}
           borderRadius={30}
           onPress={() => {
-            if (!frontPhoto || !backPhoto) {
-              Alert.alert(
-                "Missing Photos",
-                "Please upload both front and back photos of your ID."
-              );
-              return;
-            }
-            navigation.navigate("InsuranceVerification" as never, {
-              title: "Update Insurance",
-            });
+            handleNext();
           }}
           backgroundColor="#545EE1"
           textColor="#fff"

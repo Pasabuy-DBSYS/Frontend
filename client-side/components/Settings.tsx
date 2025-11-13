@@ -6,16 +6,19 @@ import UpdateDisplayName from "./modals/UpdateDisplayName";
 import UpdatePhoneNumber from "./modals/UpdatePhoneNumber";
 import UpdateEmail from "./modals/UpdateEmail";
 import AuthLeftButton from "./svg/AuthLeftButton";
+import { useAuthStore } from "@/app/api/store/auth_store";
+import { UserResponseDTO } from "@/app/api/dto/response/auth.response.dto";
 
 const Settings = () => {
   const navigation = useNavigation();
   const route = useRoute<any>();
-  const { user } = route.params;
+  const { user } = useAuthStore();
+
   const settings = [
-    { label: "Name", value: user.firstName },
-    { label: "Phone number", value: "+63******27" },
+    { label: "Name", value: user?.firstName },
+    { label: "Phone number", value: user?.phone },
     { label: "Email", value: "ch***o@gmail.com" },
-    { label: "Date of birth", value: user.dateOfBirth.toLocaleDateString() },
+    { label: "Date of birth", value: user?.birthday },
     { label: "Password", value: "" },
   ];
   const [updateDisplayName, setUpdateDisplayName] = useState<boolean>(false);
@@ -37,7 +40,7 @@ const Settings = () => {
         visible={updatePhoneNumber}
         onClose={() => setUpdatePhoneNumber(false)}
         onChangePress={() => setUpdatePhoneNumber(false)}
-        phoneNumber={user.phoneNumber}
+        phoneNumber={user?.phone ?? ""}
       ></UpdatePhoneNumber>
       <UpdateDisplayName
         visible={updateDisplayName}

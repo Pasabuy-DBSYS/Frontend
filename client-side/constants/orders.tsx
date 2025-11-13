@@ -7,9 +7,9 @@ function formatOrderTime(date: Date): string {
     hour12: true,
   }).format(date);
 
-  const weekday = new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-  }).format(date);
+  const weekday = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(
+    date
+  );
   const day = date.getDate();
   const month = date.getMonth() + 1;
   const year = date.getFullYear();
@@ -17,10 +17,18 @@ function formatOrderTime(date: Date): string {
   return `${time}, ${weekday}, ${day}/${month}/${year}`;
 }
 
+// ---------------------------
+// CUSTOMER ORDERS
+// ---------------------------
 export const orders: Order[] = [
   {
     orderId: 101,
-    orderStatus: "Pending",
+    user: {
+      firstName: "Maria",
+      lastName: "Santos",
+      middleName: "L.",
+    },
+    orderStatus: "Delivered",
     orderTime: new Date(2025, 7, 20, 9, 20),
     formattedTime: formatOrderTime(new Date(2025, 7, 20, 9, 20)),
     locationBought: "Jollibee SM Downtown",
@@ -31,7 +39,12 @@ export const orders: Order[] = [
   },
   {
     orderId: 102,
-    orderStatus: "Delivered",
+    user: {
+      firstName: "John",
+      lastName: "Reyes",
+      middleName: "M.",
+    },
+    orderStatus: "Pending",
     orderTime: new Date(2025, 7, 21, 14, 35),
     formattedTime: formatOrderTime(new Date(2025, 7, 21, 14, 35)),
     locationBought: "7-Eleven Loyola Street",
@@ -42,6 +55,11 @@ export const orders: Order[] = [
   },
   {
     orderId: 103,
+    user: {
+      firstName: "Alyssa",
+      lastName: "Cruz",
+      middleName: "T.",
+    },
     orderStatus: "In Transit",
     orderTime: new Date(2025, 7, 22, 11, 50),
     formattedTime: formatOrderTime(new Date(2025, 7, 22, 11, 50)),
@@ -53,7 +71,12 @@ export const orders: Order[] = [
   },
   {
     orderId: 104,
-    orderStatus: "Cancelled",
+    user: {
+      firstName: "Kevin",
+      lastName: "Tan",
+      middleName: null,
+    },
+    orderStatus: "Delivered",
     orderTime: new Date(2025, 7, 22, 18, 10),
     formattedTime: formatOrderTime(new Date(2025, 7, 22, 18, 10)),
     locationBought: "Watsons Gateway Mall",
@@ -64,6 +87,11 @@ export const orders: Order[] = [
   },
   {
     orderId: 105,
+    user: {
+      firstName: "Nicole",
+      lastName: "Garcia",
+      middleName: "R.",
+    },
     orderStatus: "Delivered",
     orderTime: new Date(2025, 7, 23, 8, 45),
     formattedTime: formatOrderTime(new Date(2025, 7, 23, 8, 45)),
@@ -75,9 +103,17 @@ export const orders: Order[] = [
   },
 ];
 
+// ---------------------------
+// COURIER DELIVERIES
+// ---------------------------
 export const deliveries: Order[] = [
   {
     orderId: 201,
+    user: {
+      firstName: "Christian",
+      lastName: "Osorno",
+      middleName: null,
+    },
     orderStatus: "Delivered",
     orderTime: new Date(2025, 7, 20, 10, 15),
     formattedTime: formatOrderTime(new Date(2025, 7, 20, 10, 15)),
@@ -89,6 +125,11 @@ export const deliveries: Order[] = [
   },
   {
     orderId: 202,
+    user: {
+      firstName: "Rafael",
+      lastName: "Lim",
+      middleName: "P.",
+    },
     orderStatus: "In Transit",
     orderTime: new Date(2025, 7, 21, 13, 40),
     formattedTime: formatOrderTime(new Date(2025, 7, 21, 13, 40)),
@@ -100,6 +141,11 @@ export const deliveries: Order[] = [
   },
   {
     orderId: 203,
+    user: {
+      firstName: "Bea",
+      lastName: "Mendoza",
+      middleName: "Q.",
+    },
     orderStatus: "Pending",
     orderTime: new Date(2025, 7, 22, 15, 10),
     formattedTime: formatOrderTime(new Date(2025, 7, 22, 15, 10)),
@@ -111,6 +157,11 @@ export const deliveries: Order[] = [
   },
   {
     orderId: 204,
+    user: {
+      firstName: "Erica",
+      lastName: "Villanueva",
+      middleName: "D.",
+    },
     orderStatus: "Cancelled",
     orderTime: new Date(2025, 7, 23, 17, 5),
     formattedTime: formatOrderTime(new Date(2025, 7, 23, 17, 5)),
@@ -122,50 +173,11 @@ export const deliveries: Order[] = [
   },
   {
     orderId: 205,
-    orderStatus: "Delivered",
-    orderTime: new Date(2025, 7, 24, 9, 30),
-    formattedTime: formatOrderTime(new Date(2025, 7, 24, 9, 30)),
-    locationBought: "The Coffee Bean Gateway Mall",
-    specification: "Cappuccino and blueberry muffin",
-    instructions: "Deliver to office reception",
-    placeDelivered: "Tech Hub Building, 5th Floor",
-    fee: 65,
-  },
-  {
-    orderId: 206,
-    orderStatus: "Cancelled",
-    orderTime: new Date(2025, 7, 23, 17, 5),
-    formattedTime: formatOrderTime(new Date(2025, 7, 23, 17, 5)),
-    locationBought: "FamilyMart Aurora Blvd",
-    specification: "Assorted snacks and drinks pack",
-    instructions: "Cancelled by customer before pickup",
-    placeDelivered: "Miriam College Gate 3",
-    fee: 40,
-  },
-  {
-    orderId: 207,
-    orderStatus: "Delivered",
-    orderTime: new Date(2025, 7, 24, 9, 30),
-    formattedTime: formatOrderTime(new Date(2025, 7, 24, 9, 30)),
-    locationBought: "The Coffee Bean Gateway Mall",
-    specification: "Cappuccino and blueberry muffin",
-    instructions: "Deliver to office reception",
-    placeDelivered: "Tech Hub Building, 5th Floor",
-    fee: 65,
-  },
-  {
-    orderId: 208,
-    orderStatus: "Cancelled",
-    orderTime: new Date(2025, 7, 23, 17, 5),
-    formattedTime: formatOrderTime(new Date(2025, 7, 23, 17, 5)),
-    locationBought: "FamilyMart Aurora Blvd",
-    specification: "Assorted snacks and drinks pack",
-    instructions: "Cancelled by customer before pickup",
-    placeDelivered: "Miriam College Gate 3",
-    fee: 40,
-  },
-  {
-    orderId: 209,
+    user: {
+      firstName: "Ivan",
+      lastName: "Delos Reyes",
+      middleName: null,
+    },
     orderStatus: "Delivered",
     orderTime: new Date(2025, 7, 24, 9, 30),
     formattedTime: formatOrderTime(new Date(2025, 7, 24, 9, 30)),
