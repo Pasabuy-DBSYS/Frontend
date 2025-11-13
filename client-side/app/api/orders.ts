@@ -11,6 +11,11 @@ import { GEOAPIFY_KEY } from "@env";
 import { Coordinates, Order } from "@/types/interfaces";
 import { convertCoordinatesToAddress } from "./geoapify";
 import * as SignalR from "@microsoft/signalr";
+import { useMessageRoomState } from "./store/message_room_store";
+import { useActiveOrderStore } from "./store/order_store";
+import { useOrdersHubStore } from "./store/orders_hub_store";
+import { useChatsHubStore } from "./store/chat_hub_store";
+import { getUserById } from "./user";
 
 const BASE_URL = `${API_BASE_URL}/Orders`;
 let connection: SignalR.HubConnection | null = null;
@@ -140,7 +145,8 @@ export const postOrder = async (
       },
     });
 
-    response.data;
+    console.log(``);
+    return response.data;
   } catch (err: any) {
     const apiError = err.response?.data;
 
@@ -176,6 +182,24 @@ export const acceptOrderById = async (
         },
       }
     );
+    const { customerId, courierId, chatRoomResponseDTO, deliveryDetailsDTO } =
+      response.data;
+    const chatRoomId = chatRoomResponseDTO?.roomIdPK;
+
+    console.log(`CHAT ROOM RESPONSE ${JSON.stringify(chatRoomResponseDTO)}`);
+    useMessageRoomState.setState({
+      messageRoomParticipants: {
+        roomId: chatRoomId ?? null,
+        senderId: courierId ?? null,
+        receiverId: customerId ?? null,
+      },
+    });
+    useActiveOrderStore.setState({ activeOrder: { ...response.data } });
+
+    console.log(`
+      COURIER SIDE ACTIVE ORDER: ${JSON.stringify(
+        useActiveOrderStore.getState().activeOrder
+      )})}`);
     return response.data;
   } catch (err: any) {
     const status = err?.response?.status;
@@ -195,56 +219,37 @@ export const acceptOrderById = async (
 };
 
 export const fetchOrderRealtime = async (
-  onCreated: (order: OrderResponseDTO) => void,
-  onUpdated?: (order: OrderResponseDTO) => void
+  onCreated: (order: OrderResponseDTO) => void
 ): Promise<void> => {
-  try {
-    const token = useAuthStore.getState().token;
+  const { connection, initConnection } = useOrdersHubStore.getState();
 
-    // Prevent multiple connections
-    if (
-      connection &&
-      connection.state === SignalR.HubConnectionState.Connected
-    ) {
-      console.log("🟢 SignalR already connected");
-      return;
-    }
-
-    connection = new SignalR.HubConnectionBuilder()
-      .withUrl(`${API_BASE_URL}/hubs/ordersHub`, {
-        accessTokenFactory: () => token ?? "",
-      })
-      .withAutomaticReconnect()
-      .configureLogging(SignalR.LogLevel.Information)
-      .build();
-
-    connection.on("OrderCreated", (newOrder: OrderResponseDTO) => {
-      console.log("📦 Real-time order created:", newOrder);
-      onCreated(newOrder);
-    });
-
-    if (onUpdated) {
-      connection.on("OrderUpdated", (updatedOrder: OrderResponseDTO) => {
-        console.log("♻️ Real-time order updated:", updatedOrder);
-        onUpdated(updatedOrder);
-      });
-    }
-
-    connection.onreconnecting(() =>
-      console.log("🔄 Reconnecting to SignalR...")
-    );
-    connection.onreconnected(() => console.log("✅ Reconnected to SignalR"));
-
-    await connection.start();
-    console.log("✅ SignalR connection established");
-  } catch (err) {
-    console.error("❌ SignalR connection failed:", err);
+  // Ensure connection is active
+  let activeConnection = connection;
+  if (
+    !activeConnection ||
+    activeConnection.state !== SignalR.HubConnectionState.Connected
+  ) {
+    await initConnection();
+    activeConnection = useOrdersHubStore.getState().connection;
   }
-};
 
+  if (!activeConnection) {
+    console.error("❌ OrdersHub connection not available.");
+    return;
+  }
+
+  activeConnection.off("OrderCreated");
+
+  // Listen for real-time order creation
+  activeConnection.on("OrderCreated", (newOrder: OrderResponseDTO) => {
+    onCreated(newOrder);
+  });
+};
 export const stopOrderRealtime = async () => {
+  const { disconnect } = useChatsHubStore.getState();
+
   if (connection) {
-    await connection.stop();
+    await disconnect();
     console.log("🛑 SignalR connection stopped");
   }
 };
@@ -253,18 +258,99 @@ export const getCurrentOrderAsCourier = async (): Promise<OrderResponseDTO> => {
   try {
     const token = useAuthStore.getState().token;
 
-    const response = await axios.get<OrderResponseDTO>(`${BASE_URL}/courier`, {
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await axios.get<OrderResponseDTO>(
+      `${BASE_URL}/courier/activeorder`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
     console.log(`RESPONSE: ${JSON.stringify(response)}`);
 
     return response.data;
   } catch (err) {
-    console.log(err); 
+    console.log(err);
     throw err;
   }
+};
+
+export const getCurrentOrderAsCustomer =
+  async (): Promise<OrderResponseDTO> => {
+    try {
+      const token = useAuthStore.getState().token;
+
+      const response = await axios.get<OrderResponseDTO>(
+        `${BASE_URL}/customer/activeorder`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      console.log(`RESPONSE: ${JSON.stringify(response)}`);
+
+      return response.data;
+    } catch (err) {
+      console.log(err);
+      throw err;
+    }
+  };
+
+export const receiveOrderRealtime = async (): Promise<void> => {
+  const { connection, initConnection } = useOrdersHubStore.getState();
+
+  let activeConnection = connection;
+  if (
+    !activeConnection ||
+    activeConnection.state !== SignalR.HubConnectionState.Connected
+  ) {
+    await initConnection();
+    activeConnection = useOrdersHubStore.getState().connection;
+  }
+
+  if (!activeConnection) {
+    console.error(
+      "❌ OrdersHub connection not available for receiving orders."
+    );
+    return;
+  }
+
+  // 🔄 Clean up existing listeners before re-binding
+  activeConnection.off("OrderAccepted");
+  activeConnection.off("OrderUpdated");
+
+  // ✅ When a courier accepts an order (notify customer)
+  activeConnection.on(
+    "OrderAccepted",
+    async (updatedOrder: OrderResponseDTO) => {
+      console.log("📬 Order accepted:", updatedOrder);
+
+      useActiveOrderStore.setState({ activeOrder: updatedOrder });
+      const { activeOrder } = useActiveOrderStore.getState();
+
+      console.log(`CUSTOMER ACTIVE ORDER SIDE: ${JSON.stringify(activeOrder)}`);
+      if (updatedOrder.courierId) {
+        try {
+          console.log(`RECEIVED COURIER ID: ${updatedOrder.courierId}`);
+          const courier = await getUserById(updatedOrder.courierId);
+          console.log("👤 Courier info:", courier);
+        } catch (err) {
+          console.error("Failed to fetch courier info:", err);
+        }
+      }
+    }
+  );
+
+  // 🆕 Optional: order status updates (Delivered, Canceled, etc.)
+  activeConnection.on("OrderUpdated", (updatedOrder: OrderResponseDTO) => {
+    console.log("♻️ Order updated:", updatedOrder);
+    useActiveOrderStore.setState({ activeOrder: updatedOrder });
+  });
+
+  console.log("✅ Listening for OrderAccepted and OrderUpdated events...");
 };

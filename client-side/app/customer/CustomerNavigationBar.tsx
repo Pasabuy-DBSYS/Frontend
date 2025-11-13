@@ -1,7 +1,7 @@
 import Home from "@/app/customer/CustomerHome";
 import Orders from "@/app/customer/Orders";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, act } from "react";
 import {
   View,
   Text,
@@ -16,12 +16,16 @@ import HistoryIcon from "../../components/svg/HistoryIcon";
 import NotifcationIcon from "../../components/svg/NotifcationIcon";
 import OrderHistory from "@/app/customer/OrderHistory";
 import Profile from "@/components/Profile";
+import ActiveOrderBanner from "@/components/ActiveOrderBanner";
+import { receiveOrderRealtime } from "../api/orders";
+import { useOrdersHubStore } from "../api/store/orders_hub_store";
 
 const CustomerNavigationBar = () => {
   const [activeTab, setActiveTab] = useState(2);
   const { width } = Dimensions.get("window");
   const route = useRoute<any>();
   const navPage = route.params?.navPage;
+  const { disconnect } = useOrdersHubStore();
 
   const navItems = [
     { icon: <CartIcon />, name: "Cart" },
@@ -30,6 +34,29 @@ const CustomerNavigationBar = () => {
     { icon: <HistoryIcon />, name: "History" },
     { icon: <ProfileIcon />, name: "Profile" },
   ];
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const initRealtime = async () => {
+      try {
+        await receiveOrderRealtime();
+        console.log("✅ Connected to OrdersHub for real-time updates");
+      } catch (err) {
+        console.error("❌ Failed to connect to OrdersHub:", err);
+      }
+    };
+
+    initRealtime();
+
+    return () => {
+      if (isMounted) {
+        disconnect(); // safely stop connection when user leaves customer side
+        console.log("🛑 Disconnected from OrdersHub");
+        isMounted = false;
+      }
+    };
+  }, []);
 
   // Scale animation (no lift)
   const scaleAnims = useRef(

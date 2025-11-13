@@ -22,6 +22,8 @@ import OrderHistory from "./app/customer/OrderHistory";
 import CourierTrackingView from "./app/courier/CourierTrackingView";
 import OrderList from "./app/courier/OrderList";
 import CourierHome from "./app/courier/CourierHome";
+import MessagePage from "./components/MessagePage";
+import CustomerTrackingView from "./app/customer/CustomerTrackingView";
 
 const Stack = createNativeStackNavigator();
 
@@ -118,6 +120,11 @@ export default function App() {
           name="CourierTrackingView"
           component={CourierTrackingView}
         />
+        <Stack.Screen name="MessagePage" component={MessagePage}></Stack.Screen>
+        <Stack.Screen
+          name="CustomerTrackingView"
+          component={CustomerTrackingView}
+        ></Stack.Screen>
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -33,7 +33,8 @@ import { useAuthStore } from "../api/store/auth_store";
 import * as Location from "expo-location";
 import { AcceptOrderRequestDTO } from "../api/dto/request/order.request.dto";
 import * as SignalR from "@microsoft/signalr";
-import { useCourierOrderStore } from "../api/store/courier_store";
+import { Coordinates } from "@/types/interfaces";
+import { useActiveOrderStore } from "../api/store/order_store";
 
 if (
   Platform.OS === "android" &&
@@ -46,20 +47,16 @@ const OrderList = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const navigator = useNavigation<CourierTrackingViewNavProp>();
   const [showConfirm, setShowConfirm] = useState(false);
-  const { activeOrder, clearActiveOrder } = useCourierOrderStore();
+  const { activeOrder, clearActiveOrder } = useActiveOrderStore();
   const [orders, setOrders] = useState<OrderResponseDTO[] | null>(null);
-  const [location, setLocation] = useState<Location.LocationObject | null>(
-    null
-  );
+  const [location, setLocation] = useState<Coordinates | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const { user } = useAuthStore();
-  const { setActiveOrderId, setActiveOrder } = useCourierOrderStore();
 
   const routeCourierTrackingView = async (orderId: number) => {
     console.log(`Order Id: ${orderId}`);
     const activeOrder = await getOrderById(orderId);
-    setActiveOrder(activeOrder);
 
     navigator.navigate("CourierTrackingView", { orderId: orderId });
     setShowConfirm(false);
@@ -77,8 +74,11 @@ const OrderList = () => {
         accuracy: Location.Accuracy.High,
       });
 
-      setLocation(currentLocation);
-      console.log("📍 Current location:", currentLocation);
+      const coords: Coordinates = currentLocation.coords;
+      setLocation(coords);
+
+      console.log("📍 Current location:", JSON.stringify(coords)); // use local variable, not state
+      return coords; // return it so you can use it immediately
     } catch (err) {
       console.error("Error getting location:", err);
       setErrorMsg("Failed to retrieve location");
@@ -100,16 +100,15 @@ const OrderList = () => {
 
   const acceptOrder = async (orderId: number) => {
     try {
-      await getLocation();
+      const coords = await getLocation(); // use the returned value
       const request: AcceptOrderRequestDTO = {
         courierId: user?.userIdPK!,
-        courierLatitude: location?.coords.latitude!,
-        courierLongitude: location?.coords.longitude!,
+        courierLatitude: coords?.latitude ?? 0,
+        courierLongitude: coords?.longitude ?? 0,
       };
 
       const response = await acceptOrderById(orderId, request);
       console.log("Order accepted:", response);
-
       return response;
     } catch (err: any) {
       console.error("Error accepting order:", err.message);
@@ -121,25 +120,11 @@ const OrderList = () => {
     console.log(`ACTIVE ORDER: ${JSON.stringify(activeOrder)}`);
     if (!activeOrder) {
       fetchPendingOrders();
-      fetchOrderRealtime(
-        (newOrder) => {
-          if (newOrder.status === Status.PENDING) {
-            setOrders((prev) => (prev ? [newOrder, ...prev] : [newOrder]));
-          }
-        },
-        (updatedOrder) => {
-          setOrders((prev) =>
-            prev
-              ? prev.map((o) =>
-                  o.orderIdPK === updatedOrder.orderIdPK ? updatedOrder : o
-                )
-              : [updatedOrder]
-          );
+      fetchOrderRealtime((newOrder) => {
+        if (newOrder.status === Status.PENDING) {
+          setOrders((prev) => (prev ? [newOrder, ...prev] : [newOrder]));
         }
-      );
-      return () => {
-        stopOrderRealtime();
-      };
+      });
     }
   }, []);
 

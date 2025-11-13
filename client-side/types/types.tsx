@@ -104,6 +104,8 @@ export type RootStackParamList = {
     returnLocation: Coordinates;
   };
   OrderHistory: { mode: HistoryMode } | undefined;
+  MessagePage: undefined;
+  CustomerTrackingView: undefined;
 };
 
 export type RootNav = NativeStackNavigationProp<RootStackParamList>;
@@ -118,6 +120,15 @@ export type CourierTrackingViewRouteProp = RouteProp<
   "CourierTrackingView"
 >;
 
+export type CustomerTrackingViewNavProp = NativeStackNavigationProp<
+  RootStackParamList,
+  "CustomerTrackingView"
+>;
+
+export type CustomerTrackingViewRouteProp = RouteProp<
+  RootStackParamList,
+  "CustomerTrackingView"
+>;
 export type LocationPickerNavProp =
   NativeStackNavigationProp<RootStackParamList>;
 
@@ -125,6 +136,9 @@ export type OrdersNavProp = NativeStackNavigationProp<
   RootStackParamList,
   "Orders"
 >;
+
+export type MessagePageNavProp = NativeStackNavigationProp<RootStackParamList>;
+export type MessageRoute = RouteProp<RootStackParamList, "MessagePage">;
 
 export type OrdersRouteProp = RouteProp<RootStackParamList, "Orders">;
 

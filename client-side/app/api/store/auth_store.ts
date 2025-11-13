@@ -7,9 +7,7 @@ import { getCurrentProfile } from "../user";
 import { sortRoutes } from "expo-router/build/sortRoutes";
 import { Coordinates } from "@/types/interfaces";
 
-interface DecodedToken {
-  exp?: number; // JWT standard expiration (Unix timestamp in seconds)
-}
+interface DecodedToken {}
 
 interface AuthState {
   token: string | null;
@@ -33,6 +31,7 @@ export const useAuthStore = create<AuthState>()(
         const isExpired = (() => {
           try {
             const decoded: DecodedToken = jwtDecode(token);
+            console.log(`JWT TOKEN: `, token);
             console.log("Decoded Token:", JSON.stringify(decoded));
 
             console.log(`Token: ${get().token}`);

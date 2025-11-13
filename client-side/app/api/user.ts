@@ -102,7 +102,7 @@ export const getCurrentProfile = async (): Promise<UserResponseDTO> => {
     const data = err?.response?.data;
     const msg = data?.message;
 
-    console.error("❌ [acceptOrder] Request Failed", {
+    console.error("[acceptOrder] Request Failed", {
       url: err?.config?.url,
       method: err?.config?.method?.toUpperCase(),
       status,
@@ -139,7 +139,7 @@ export const changeRole = async (): Promise<ChangeRoleResponse> => {
         throw new Error("Invalid current role");
     }
 
-    console.log("🔁 Changing role to:", targetRole);
+    console.log("Changing role to:", targetRole);
 
     const changeRoleUrl = `${BASE_URL}/change/role/${targetRole}`;
     console.log(changeRoleUrl);
@@ -154,12 +154,12 @@ export const changeRole = async (): Promise<ChangeRoleResponse> => {
       }
     );
 
-    console.log("✅ Role changed on server:", response.data);
+    console.log("Role changed on server:", response.data);
 
     const updatedUser = await getCurrentProfile();
     useAuthStore.setState({ user: updatedUser });
 
-    console.log("🧭 Refreshed user profile:", updatedUser);
+    console.log("Refreshed user profile:", updatedUser);
 
     return {
       newToken: response.data,
@@ -177,5 +177,23 @@ export const changeRole = async (): Promise<ChangeRoleResponse> => {
       data,
     });
     throw new Error(`${msg} (HTTP ${status ?? "Unknown"})`);
+  }
+};
+
+export const getUserById = async (userId: number): Promise<UserResponseDTO> => {
+  try {
+    const { token } = useAuthStore.getState();
+
+    const response = await axios.get<UserResponseDTO>(`${BASE_URL}/${userId}`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return response.data;
+  } catch (err) {
+    console.error("❌ Error fetching user by ID:", err);
+    throw err;
   }
 };

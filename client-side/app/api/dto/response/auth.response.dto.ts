@@ -3,6 +3,7 @@
 import { Role } from "@/types/types";
 import { DeliveryDetailsResponseDTO } from "./delivery.response.dto";
 import { PaymentsResponseDTO } from "./payment.response.dto";
+import { ChatRoomResponseDTO } from "./chat.response.dto";
 
 // ---------------------------------------------------------
 // ENUMS (mirror from PasabuyAPI.Enums)
@@ -70,6 +71,7 @@ export interface OrderResponseDTO {
   updated_at: string;
   deliveryDetailsDTO?: DeliveryDetailsResponseDTO;
   paymentsResponseDTO?: PaymentsResponseDTO;
+  chatRoomResponseDTO?: ChatRoomResponseDTO;
 }
 
 export interface TokenResponseDTO {

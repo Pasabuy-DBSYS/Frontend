@@ -46,6 +46,7 @@ const Orders: React.FC = () => {
   const [requestDto, setRequestDto] = useState<PostOrderRequestDTO>(
     {} as PostOrderRequestDTO
   );
+  const navigator = useNavigation();
 
   const {
     setFullLocation,
@@ -108,6 +109,8 @@ const Orders: React.FC = () => {
 
       Alert.alert("Success", "Order successfully created!");
       console.log("Order created:", response);
+
+      if (response) navigator.navigate("CustomerTrackingView" as never);
     } catch (err: any) {
       setIsLoading(false);
       console.error(

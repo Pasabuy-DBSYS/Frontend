@@ -2,6 +2,7 @@ import AuthLeftButton from "@/components/svg/AuthLeftButton";
 import {
   CourierTrackingViewNavProp,
   CourierTrackingViewRouteProp,
+  CustomerTrackingViewNavProp,
 } from "@/types/types";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import React, { act, useEffect, useRef, useState } from "react";
@@ -32,7 +33,7 @@ import { useActiveOrderStore } from "../api/store/order_store";
 
 const { height } = Dimensions.get("window");
 
-const CourierTrackingView = () => {
+const CustomerTrackingView = () => {
   const collapsedHeight = height * 0.2;
   const expandedHeight = height * 0.6;
   const animatedHeight = useRef(new Animated.Value(collapsedHeight)).current;
@@ -45,7 +46,7 @@ const CourierTrackingView = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [courierLocation, setCourierLocation] = useState<Coordinates>();
   const [destinationLocation, setDestinationLocation] = useState<Coordinates>();
-  const navigator = useNavigation<CourierTrackingViewNavProp>();
+  const navigator = useNavigation<CustomerTrackingViewNavProp>();
 
   const fetchRoute = async (start: Coordinates, end: Coordinates) => {
     try {
@@ -493,4 +494,4 @@ const CourierTrackingView = () => {
   );
 };
 
-export default CourierTrackingView;
+export default CustomerTrackingView;
