@@ -105,14 +105,15 @@ export type RootStackParamList = {
   };
   OrderHistory: { mode: HistoryMode } | undefined;
   MessagePage: undefined;
-  CustomerTrackingView: undefined;
+  CustomerTrackingView: { orderId: number };
 };
 
 export type RootNav = NativeStackNavigationProp<RootStackParamList>;
 
 export type CourierTrackingViewNavProp = NativeStackNavigationProp<
   RootStackParamList,
-  "CourierTrackingView"
+  "CourierTrackingView",
+  "CustomerTrackingView"
 >;
 
 export type CourierTrackingViewRouteProp = RouteProp<

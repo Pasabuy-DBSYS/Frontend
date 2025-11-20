@@ -57,21 +57,8 @@ export interface UserResponseDTO {
   createdAt: string; // DateTime -> ISO string
   updatedAt: string; // DateTime -> ISO string
   currentRole: Role;
+  profilePictureKey: string;
   verifiactionInfoDTO: VerificationInfoResponseDTO;
-}
-
-export interface OrderResponseDTO {
-  orderIdPK: number;
-  customerId: number;
-  courierId: number;
-  request: string;
-  status: number;
-  priority: number;
-  created_at: string;
-  updated_at: string;
-  deliveryDetailsDTO?: DeliveryDetailsResponseDTO;
-  paymentsResponseDTO?: PaymentsResponseDTO;
-  chatRoomResponseDTO?: ChatRoomResponseDTO;
 }
 
 export interface TokenResponseDTO {
