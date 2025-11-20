@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, Feather } from "@expo/vector-icons";
 
 export type Participant = {
-  id: string;
+  id: number;
   name: string;
   avatarUrl?: string;
 };
@@ -23,6 +23,8 @@ export default function ParticipantHeader({
   onMore,
 }: Props) {
   if (!participant) return null;
+
+  console.log(participant.avatarUrl);
 
   const initials = participant.name
     .split(" ")
@@ -62,7 +64,9 @@ export default function ParticipantHeader({
       >
         {participant.avatarUrl ? (
           <Image
-            source={{ uri: participant.avatarUrl }}
+            source={{
+              uri: `https://pasabuyres.s3.ap-southeast-2.amazonaws.com/${participant.avatarUrl}`,
+            }}
             style={{ width: 44, height: 44, borderRadius: 22 }}
           />
         ) : (
@@ -93,19 +97,11 @@ export default function ParticipantHeader({
           columnGap: 8,
         }}
       >
-        <TouchableOpacity
-          hitSlop={12}
-          style={{ padding: 6 }}
-          onPress={() => onCall?.(participant.id)}
-        >
+        <TouchableOpacity hitSlop={12} style={{ padding: 6 }}>
           <Feather name="phone-call" size={22} color="#FFFFFF" />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          hitSlop={12}
-          style={{ padding: 6 }}
-          onPress={() => onMore?.(participant.id)}
-        >
+        <TouchableOpacity hitSlop={12} style={{ padding: 6 }}>
           <Feather name="more-vertical" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
