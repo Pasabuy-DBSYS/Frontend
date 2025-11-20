@@ -1,6 +1,6 @@
 import axios from "axios";
 import { API_BASE_URL } from "./config";
-import { UserRequestDTO } from "./dto/request/auth.request.dto";
+import { RNFile, UserRequestDTO } from "./dto/request/auth.request.dto";
 import { UserResponseDTO } from "./dto/response/auth.response.dto";
 import { useAuthStore } from "./store/auth_store";
 import { Role } from "@/types/types";
@@ -194,6 +194,33 @@ export const getUserById = async (userId: number): Promise<UserResponseDTO> => {
     return response.data;
   } catch (err) {
     console.error("❌ Error fetching user by ID:", err);
+    throw err;
+  }
+};
+
+export const changeProfile = async (imageFile: RNFile) => {
+  const { token } = useAuthStore.getState();
+
+  const formData = new FormData();
+  formData.append("ProfilePicture", {
+    uri: imageFile.uri,
+    name: imageFile.name,
+    type: imageFile.type,
+  } as any);
+
+  try {
+    const { data } = await axios.patch(`${BASE_URL}/change/profile`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    console.log(`RESPONSE ${JSON.stringify(data)}`);
+
+    return data;
+  } catch (err) {
+    console.log(err);
     throw err;
   }
 };

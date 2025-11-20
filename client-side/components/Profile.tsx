@@ -1,14 +1,23 @@
-import React from "react";
-import { View, Text, Image, TouchableOpacity } from "react-native";
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { Button } from "@/components/Button"; // adjust path as needed
 import ProfileButtons from "@/components/ProfileButtons";
 import { useAuthStore } from "@/app/api/store/auth_store";
 import { UserResponseDTO } from "@/app/api/dto/response/auth.response.dto";
+import ProfilePhotoModal from "./modals/ChangeProfile";
 
 const Profile = () => {
   const { user } = useAuthStore();
+
+  const [isChangeProfile, setIsChangeProfile] = useState(false);
+  const [globalLoading, setGlobalLoading] = useState(false);
 
   return (
     <LinearGradient
@@ -21,7 +30,12 @@ const Profile = () => {
         paddingTop: "10%",
       }}
     >
-      {/* Back Button */}
+      <ProfilePhotoModal
+        visible={isChangeProfile}
+        onClose={() => setIsChangeProfile(false)}
+        setGlobalLoading={setGlobalLoading}
+      />
+
       <TouchableOpacity
         style={{
           position: "absolute",
@@ -33,38 +47,83 @@ const Profile = () => {
         <Ionicons name="chevron-back" size={28} color="#fff" />
       </TouchableOpacity>
 
-      {/* Header */}
       <View style={{ alignItems: "center", marginTop: 60 }}>
         <Text style={{ color: "#FFFFFF", fontWeight: "bold", fontSize: 20 }}>
           PROFILE
         </Text>
       </View>
 
-      {/* Profile Info */}
       <View style={{ alignItems: "center", marginTop: 30 }}>
-        <Image
-          source={{
-            uri: `https://static0.gamerantimages.com/wordpress/wp-content/uploads/2025/08/naruto-new-anime-2025-announcement.jpg?w=1600&h=1200&fit=crop`,
-          }}
-          style={{
-            width: 100,
-            height: 100,
-            borderRadius: 50,
-            marginBottom: 15,
-            backgroundColor: "#eee",
-          }}
-        />
+        <TouchableOpacity onPress={() => setIsChangeProfile(true)}>
+          <Image
+            source={{
+              uri: `https://pasabuyres.s3.ap-southeast-2.amazonaws.com/${user?.profilePictureKey}`,
+            }}
+            style={{
+              width: 100,
+              height: 100,
+              borderRadius: 50,
+              marginBottom: 15,
+              backgroundColor: "#eee",
+            }}
+          />
+        </TouchableOpacity>
+
         <Text style={{ fontSize: 20, fontWeight: "bold", color: "#000" }}>
           {user?.firstName} {user?.lastName}
         </Text>
+
         <Text style={{ fontSize: 14, color: "#444", marginTop: 3 }}>
           {user?.email}
         </Text>
+
         <Text style={{ fontSize: 14, color: "#444", marginTop: 2 }}>
           +63{user?.phone.substring(1, user.phone.length - 1)}
         </Text>
       </View>
-      <ProfileButtons user={user as UserResponseDTO} />
+
+      <ProfileButtons users={user as UserResponseDTO} />
+
+      {/* Global Loading Overlay */}
+      {globalLoading && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999,
+          }}
+        >
+          <View
+            style={{
+              width: 220,
+              paddingVertical: 25,
+              paddingHorizontal: 15,
+              borderRadius: 14,
+              backgroundColor: "#fff",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "600",
+                color: "#333",
+                marginBottom: 12,
+              }}
+            >
+              Updating your profile...
+            </Text>
+            <ActivityIndicator size="large" color="#545EE1" />
+          </View>
+        </View>
+      )}
     </LinearGradient>
   );
 };
