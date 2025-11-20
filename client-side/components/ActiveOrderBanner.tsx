@@ -1,23 +1,20 @@
 import React from "react";
 import { TouchableOpacity, View, Text } from "react-native";
 import { useNavigation } from "expo-router";
-import { CourierTrackingViewNavProp } from "@/types/types";
+import { CourierTrackingViewNavProp, Role } from "@/types/types";
 import { useActiveOrderStore } from "@/app/api/store/order_store";
+import { useAuthStore } from "@/app/api/store/auth_store";
 
 export default function ActiveOrderBanner() {
   const { activeOrder } = useActiveOrderStore();
   const navigator = useNavigation<CourierTrackingViewNavProp>();
-
+  const { user } = useAuthStore();
+  const role = user?.currentRole === Role.COURIER ? "Courier" : "Customer";
   if (!activeOrder) return null;
 
   return (
-    <TouchableOpacity
+    <View
       activeOpacity={0.8}
-      onPress={() =>
-        navigator.navigate("CourierTrackingView", {
-          orderId: activeOrder.orderIdPK,
-        })
-      }
       style={{
         position: "absolute",
         bottom: 120, // adjust for bottom nav height
@@ -36,7 +33,7 @@ export default function ActiveOrderBanner() {
           backgroundColor: "#4F46E5", // fallback solid color
           borderRadius: 16,
           paddingVertical: 12,
-          paddingHorizontal: 16,
+          paddingHorizontal: "5%",
           shadowColor: "#000",
           shadowOpacity: 0.25,
           shadowRadius: 6,
@@ -58,6 +55,7 @@ export default function ActiveOrderBanner() {
             style={{
               color: "#E5E7EB",
               fontSize: 12,
+              maxWidth: "90%",
             }}
           >
             {activeOrder.deliveryDetailsDTO?.destinationAddress ||
@@ -66,13 +64,18 @@ export default function ActiveOrderBanner() {
             {"10 mins"}
           </Text>
         </View>
-        <View
+        <TouchableOpacity
           style={{
             backgroundColor: "white",
             borderRadius: 10,
-            paddingVertical: 4,
+            paddingVertical: 15,
             paddingHorizontal: 10,
           }}
+          onPress={() =>
+            navigator.navigate(`${role}TrackingView`, {
+              orderId: activeOrder.orderIdPK,
+            })
+          }
         >
           <Text
             style={{
@@ -83,8 +86,8 @@ export default function ActiveOrderBanner() {
           >
             View
           </Text>
-        </View>
+        </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }

@@ -16,8 +16,13 @@ import { useActiveOrderStore } from "./store/order_store";
 import { useOrdersHubStore } from "./store/orders_hub_store";
 import { useChatsHubStore } from "./store/chat_hub_store";
 import { getUserById } from "./user";
+import { useOtherUser } from "./hook/useOtherUser";
 
 const BASE_URL = `${API_BASE_URL}/Orders`;
+
+const { clearActiveOrder } = useActiveOrderStore.getState();
+const { setTempOrderRequest } = useActiveOrderStore.getState();
+
 let connection: SignalR.HubConnection | null = null;
 
 export const getOrders = async (): Promise<any> => {
@@ -145,7 +150,7 @@ export const postOrder = async (
       },
     });
 
-    console.log(``);
+    if (response) setTempOrderRequest(payload);
     return response.data;
   } catch (err: any) {
     const apiError = err.response?.data;
@@ -314,17 +319,15 @@ export const receiveOrderRealtime = async (): Promise<void> => {
   }
 
   if (!activeConnection) {
-    console.error(
-      "❌ OrdersHub connection not available for receiving orders."
-    );
+    console.error(" OrdersHub connection not available for receiving orders.");
     return;
   }
 
-  // 🔄 Clean up existing listeners before re-binding
+  // Clean up existing listeners before re-binding
   activeConnection.off("OrderAccepted");
   activeConnection.off("OrderUpdated");
 
-  // ✅ When a courier accepts an order (notify customer)
+  // When a courier accepts an order (notify customer)
   activeConnection.on(
     "OrderAccepted",
     async (updatedOrder: OrderResponseDTO) => {
@@ -338,7 +341,7 @@ export const receiveOrderRealtime = async (): Promise<void> => {
         try {
           console.log(`RECEIVED COURIER ID: ${updatedOrder.courierId}`);
           const courier = await getUserById(updatedOrder.courierId);
-          console.log("👤 Courier info:", courier);
+          console.log("Courier info:", courier);
         } catch (err) {
           console.error("Failed to fetch courier info:", err);
         }
@@ -346,11 +349,41 @@ export const receiveOrderRealtime = async (): Promise<void> => {
     }
   );
 
-  // 🆕 Optional: order status updates (Delivered, Canceled, etc.)
-  activeConnection.on("OrderUpdated", (updatedOrder: OrderResponseDTO) => {
-    console.log("♻️ Order updated:", updatedOrder);
-    useActiveOrderStore.setState({ activeOrder: updatedOrder });
-  });
+  activeConnection.on(
+    "OrderStatusUpdated",
+    async (updatedOrder: OrderResponseDTO) => {
+      const { setIsCancelled } = useActiveOrderStore.getState();
+      console.log("♻️ Order updated:", updatedOrder);
+
+      setIsCancelled(true);
+
+    }
+  );
 
   console.log("✅ Listening for OrderAccepted and OrderUpdated events...");
+};
+
+export const updateOrderById = async (orderId: number, orderStatus: Status) => {
+  try {
+    const token = useAuthStore.getState().token;
+
+    const response = await axios.patch(
+      `${BASE_URL}/update/${orderId}/${orderStatus}`,
+      {}, // empty request body
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (response) {
+      clearActiveOrder();
+      return response.data;
+    }
+  } catch (err) {
+    console.error(err);
+    throw err;
+  }
 };
