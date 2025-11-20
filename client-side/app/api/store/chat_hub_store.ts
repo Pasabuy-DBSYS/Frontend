@@ -27,11 +27,11 @@ export const useChatsHubStore = create<ChatsHubState>((set, get) => ({
       .configureLogging(signalR.LogLevel.Information)
       .build();
 
-    connection.onreconnecting(() => console.log("🔄 Reconnecting to ChatHub"));
-    connection.onreconnected(() => console.log("✅ Reconnected to ChatHub"));
+    connection.onreconnecting(() => console.log("Reconnecting to ChatHub"));
+    connection.onreconnected(() => console.log("Reconnected to ChatHub"));
 
     await connection.start();
-    console.log("💬 ChatHub connected");
+    console.log("ChatHub connected");
 
     set({ connection });
   },
