@@ -32,11 +32,15 @@ import { PostOrderRequestDTO } from "../api/dto/request/order.request.dto";
 import { postOrder } from "../api/orders";
 import { convertCoordinatesToAddress } from "../api/geoapify";
 import { useLocationStore } from "../api/store/location_store";
+import ConfirmOrder from "@/components/modals/ConfirmOrder";
+import { useActiveOrderStore } from "../api/store/order_store";
 
 const Orders: React.FC = () => {
   const [deviceLocation, setDeviceLocation] = useState<Coordinates | null>(
     null
   );
+  const [showConfirm, setShowConfirm] = useState(false);
+
   const [orderPrice, setOrderPrice] = useState<number>(0);
   const [coordinates, setCoordinates] = useState<Coordinates[]>([]);
   const recentSearched = useRef<GeoapifyFeature[]>([]);
@@ -46,6 +50,8 @@ const Orders: React.FC = () => {
   const [requestDto, setRequestDto] = useState<PostOrderRequestDTO>(
     {} as PostOrderRequestDTO
   );
+  const { setActiveOrder } = useActiveOrderStore();
+
   const navigator = useNavigation();
 
   const {
@@ -110,7 +116,11 @@ const Orders: React.FC = () => {
       Alert.alert("Success", "Order successfully created!");
       console.log("Order created:", response);
 
-      if (response) navigator.navigate("CustomerTrackingView" as never);
+      if (response) {
+        setActiveOrder(response);
+        navigator.navigate("CustomerTrackingView" as never);
+        return;
+      }
     } catch (err: any) {
       setIsLoading(false);
       console.error(
@@ -443,8 +453,20 @@ const Orders: React.FC = () => {
               paddingHorizontal: 25,
               marginTop: 10,
             }}
-            onPress={postOrderFunction}
+            onPress={() => setShowConfirm(true)}
           >
+            <ConfirmOrder
+              visible={showConfirm}
+              title="Confirm Order"
+              message="Do you want to submit this order request?"
+              confirmText="Submit Order"
+              cancelText="Cancel"
+              onConfirm={() => {
+                setShowConfirm(false);
+                postOrderFunction();
+              }}
+              onCancel={() => setShowConfirm(false)}
+            />
             <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
               ₱ {orderPrice} Delivery Fee
             </Text>

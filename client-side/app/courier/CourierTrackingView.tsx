@@ -13,6 +13,7 @@ import {
   PanResponder,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { orders } from "@/constants/orders"; // ✅ ensure this matches your import
@@ -24,15 +25,26 @@ import LocationBlueIcon from "@/components/svg/LocationBlueIcon";
 import PickIcon from "@/components/svg/PickIcon";
 import ConfirmPickupModal from "@/components/modals/ConfirmDeliver";
 import CancelDeliver from "@/components/modals/CancelDeliver";
-import { getCurrentOrderAsCourier, getOrderById } from "../api/orders";
+import {
+  getCurrentOrderAsCourier,
+  getOrderById,
+  updateOrderById,
+} from "../api/orders";
 import { OrderResponseDTO } from "../api/dto/response/auth.response.dto";
 import * as Location from "expo-location";
 import { GEOAPIFY_KEY } from "@env";
 import { useActiveOrderStore } from "../api/store/order_store";
+import { useOtherUserStore } from "../api/store/user_store";
+import { useOtherUser } from "../api/hook/useOtherUser";
+import Loading from "@/components/Loading";
+import { useRouteStore } from "../api/store/route_store";
+import { changeRole } from "../api/user";
+import { Status } from "../api/dto/response/order.response.dto";
 
 const { height } = Dimensions.get("window");
 
 const CourierTrackingView = () => {
+  const customerInfo = useOtherUser();
   const collapsedHeight = height * 0.2;
   const expandedHeight = height * 0.6;
   const animatedHeight = useRef(new Animated.Value(collapsedHeight)).current;
@@ -40,16 +52,31 @@ const CourierTrackingView = () => {
   const { activeOrder, setActiveOrder } = useActiveOrderStore();
 
   const [coordinates, setCoordinates] = useState<Coordinates[]>([]);
+
   const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [courierLocation, setCourierLocation] = useState<Coordinates>();
   const [destinationLocation, setDestinationLocation] = useState<Coordinates>();
   const navigator = useNavigation<CourierTrackingViewNavProp>();
+  const orderId = activeOrder?.orderIdPK;
 
   const fetchRoute = async (start: Coordinates, end: Coordinates) => {
+    if (!orderId) return [];
+
+    const cached = useRouteStore.getState().getRoute(orderId);
+
+    if (cached) {
+      console.log("Using cached route");
+      return cached;
+    }
+
+    console.log("Fetching new route");
+
     try {
       const url = `https://api.geoapify.com/v1/routing?waypoints=${start.latitude},${start.longitude}|${end.latitude},${end.longitude}&mode=drive&apiKey=${GEOAPIFY_KEY}`;
+
       const res = await fetch(url);
       const data = await res.json();
 
@@ -60,6 +87,8 @@ const CourierTrackingView = () => {
         })
       );
 
+      useRouteStore.getState().saveRoute(orderId, routeCoords);
+
       return routeCoords;
     } catch (error) {
       console.error("Error fetching route:", error);
@@ -69,11 +98,40 @@ const CourierTrackingView = () => {
 
   useEffect(() => {
     const init = async () => {
-      if (!activeOrder) return; // wait for order
+      if (!activeOrder) {
+        setLoading(true);
+        return;
+      }
+
+      const orderId = activeOrder.orderIdPK;
+      if (!orderId) return;
+
+      // 1. Check cache BEFORE anything else
+      const cached = useRouteStore.getState().getRoute(orderId);
+
+      if (cached) {
+        setCoordinates(cached);
+
+        // IMPORTANT: Set courier/destination fast from stored positions
+        setCourierLocation({
+          latitude: activeOrder.deliveryDetailsDTO?.courierLatitude ?? 0,
+          longitude: activeOrder.deliveryDetailsDTO?.courierLongitude ?? 0,
+        });
+
+        setDestinationLocation({
+          latitude: activeOrder.deliveryDetailsDTO?.locationLatitude ?? 0,
+          longitude: activeOrder.deliveryDetailsDTO?.locationLongitude ?? 0,
+        });
+
+        return;
+      }
+
+      setLoading(true);
+
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
-          console.warn("Permission to access location was denied");
+          setLoading(false);
           return;
         }
 
@@ -82,18 +140,20 @@ const CourierTrackingView = () => {
           latitude: current.coords.latitude,
           longitude: current.coords.longitude,
         };
+
         setCourierLocation(courierCoords);
 
-        const destinationCoords: Coordinates = {
+        const destinationCoords = {
           latitude: activeOrder.deliveryDetailsDTO?.locationLatitude ?? 0,
           longitude: activeOrder.deliveryDetailsDTO?.locationLongitude ?? 0,
         };
+
         setDestinationLocation(destinationCoords);
 
         const routeCoords = await fetchRoute(courierCoords, destinationCoords);
         setCoordinates(routeCoords);
-      } catch (error) {
-        console.error("❌ Error initializing courier tracking:", error);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -136,29 +196,54 @@ const CourierTrackingView = () => {
     })
   ).current;
 
-  // Early return for invalid orderId
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#FFFFFF",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <Loading />
+      </View>
+    );
+  }
   if (!activeOrder) {
     return (
       <View
         style={{
           flex: 1,
-          backgroundColor: "#545EE1",
+          backgroundColor: "#FFFFF",
           justifyContent: "center",
           alignItems: "center",
         }}
       >
-        <Text style={{ color: "#fff", fontSize: 18 }}>
-          Order not found or loading...
+        {/* Spinner */}
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            marginBottom: 12,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Loading />
+        </View>
+
+        {/* Text */}
+        <Text style={{ color: "#000000", fontSize: 18, fontWeight: "600" }}>
+          Processing order…
         </Text>
       </View>
     );
   }
-
-  const destination = { latitude: 10.2923, longitude: 123.8999 };
-
   const triggerConfirmPickup = () => {
     setShowConfirm(true);
   };
+
   return (
     <View style={{ flex: 1, backgroundColor: "#545EE1" }}>
       {/* Header Section */}
@@ -174,11 +259,20 @@ const CourierTrackingView = () => {
         <CancelDeliver
           visible={showConfirm}
           onCancel={() => setShowConfirm(false)}
-          onConfirm={() => {
+          onConfirm={async () => {
             setShowConfirm(false);
-            navigator.goBack();
+
+            if (!activeOrder) return;
+
+            try {
+              await updateOrderById(activeOrder.orderIdPK, Status.CANCELLED);
+              navigator.goBack();
+            } catch (err) {
+              console.error(err);
+            }
           }}
         />
+
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <AuthLeftButton onPress={() => navigator.goBack()} color="#fff" />
           <Text
@@ -211,8 +305,8 @@ const CourierTrackingView = () => {
               ? {
                   latitude: courierLocation.latitude,
                   longitude: courierLocation.longitude,
-                  latitudeDelta: 0.05,
-                  longitudeDelta: 0.05,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
                 }
               : undefined
           }
@@ -301,7 +395,11 @@ const CourierTrackingView = () => {
                 <Text
                   style={{ fontWeight: "700", fontSize: 18, color: "#111" }}
                 >
-                  boang
+                  {`${customerInfo?.firstName ?? ""} ${
+                    customerInfo?.middleName
+                      ? customerInfo.middleName + " "
+                      : ""
+                  }${customerInfo?.lastName ?? ""}`}
                 </Text>
               </View>
 
@@ -340,7 +438,7 @@ const CourierTrackingView = () => {
                     marginTop: 2,
                   }}
                 >
-                  static
+                  {activeOrder.deliveryDetailsDTO?.customerAddress}
                 </Text>
               </View>
             </View>
@@ -387,7 +485,13 @@ const CourierTrackingView = () => {
                         </Text>
                       </View>
 
-                      <Text style={{ color: "#555", marginLeft: 28 }}>
+                      <Text
+                        style={{
+                          color: "#555",
+                          marginLeft: 28,
+                          maxWidth: "75%",
+                        }}
+                      >
                         {activeOrder?.deliveryDetailsDTO?.destinationAddress}
                       </Text>
                     </View>
@@ -480,9 +584,27 @@ const CourierTrackingView = () => {
                       </Text>
                     </View>
                   </View>
-                  <Text style={{ color: "#555", marginTop: 10 }}>
+                  <Text style={{ color: "#555", marginBottom: -10 }}>
                     Note: You only have 10 minutes to cancel the delivery
                   </Text>
+                  <View
+                    style={{
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Button
+                      onPress={() => {
+                        setShowConfirm(true);
+                      }}
+                      title="Cancel Order"
+                      width={"80%"}
+                      height={"40%"}
+                      borderRadius={20}
+                      backgroundColor="#545EE1"
+                      textColor="white"
+                    />
+                  </View>
                 </View>
               </View>
             </>

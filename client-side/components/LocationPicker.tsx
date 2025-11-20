@@ -111,7 +111,6 @@ export default function LocationPicker() {
           );
         }
 
-        // Reverse geocode
         const address = await fetchAddress(latitude, longitude);
 
         const newRegion: Region = {

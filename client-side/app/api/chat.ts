@@ -1,6 +1,10 @@
 import axios from "axios";
 import { API_BASE_URL } from "./config";
-import { MessageRequestDTO } from "./dto/request/message.request.dto";
+import {
+  MessageImageRequestDTO,
+  MessageRequestDTO,
+  MessageType,
+} from "./dto/request/message.request.dto";
 import {
   ChatMessagesResponseDTO,
   ChatRoomResponseDTO,
@@ -9,14 +13,14 @@ import { useAuthStore } from "./store/auth_store";
 import { useChatsHubStore } from "./store/chat_hub_store";
 const BASE_URL = `${API_BASE_URL}/ChatMessages`;
 
-export const postMessage = async (
+export const postTextMessage = async (
   messageRequest: MessageRequestDTO
 ): Promise<ChatMessagesResponseDTO> => {
   const { token } = useAuthStore.getState();
 
   try {
     const { data } = await axios.post<ChatMessagesResponseDTO>(
-      `${BASE_URL}/send`,
+      `${BASE_URL}/send/text`,
       messageRequest,
       {
         headers: {
@@ -29,6 +33,38 @@ export const postMessage = async (
   } catch (err) {
     console.error("Failed to send chat message", err);
     throw err;
+  }
+};
+export const postImageMessage = async (form: FormData) => {
+  const { token } = useAuthStore.getState();
+
+  try {
+    const { data } = await axios.post(`${BASE_URL}/send/image`, form, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return data;
+  } catch (error: any) {
+    console.error("❌ Failed to send chat image message.");
+
+    if (error.response) {
+      console.error("🔍 Server responded with status:", error.response.status);
+      console.error("📝 Server error details:", error.response.data);
+      throw new Error(
+        error.response.data?.errors?.Image?.[0] ||
+          error.response.data?.message ||
+          "Server rejected the image upload."
+      );
+    }
+
+    if (error.request) {
+      throw new Error("No response from server. Check your network.");
+    }
+
+    throw new Error("Unexpected error sending image message.");
   }
 };
 
@@ -55,13 +91,42 @@ export const getMessagesByRoomId = async (
   }
 };
 
+export const loadImageByKey = async (keyarg: string): Promise<any> => {
+  const { token } = useAuthStore.getState();
+
+  try {
+    const encodedKey = encodeURIComponent(keyarg);
+
+    const { data } = await axios.get(
+      `${API_BASE_URL}/Resources/signed-url?key=${encodedKey}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    return data.signedUrl; // your backend returns SignedUrl
+  } catch (error) {
+    console.error("❌ Failed to load signed image URL");
+
+    if (axios.isAxiosError(error)) {
+      console.error("🔍 Status:", error.response?.status);
+      console.error("📝 Details:", error.response?.data);
+    } else {
+      console.error("Unexpected error:", error);
+    }
+
+    throw error;
+  }
+};
+
 export const subscribeToMessages = async (
   roomId: number,
   onReceive: (message: ChatMessagesResponseDTO) => void
 ): Promise<() => void> => {
   const { connection, initConnection } = useChatsHubStore.getState();
 
-  
   if (!connection || connection.state !== "Connected") {
     await initConnection();
     console.log(`CONNECTION: ${JSON.stringify(connection)}`);
@@ -69,10 +134,9 @@ export const subscribeToMessages = async (
 
   const activeConnection = useChatsHubStore.getState().connection!;
   try {
-    // ✅ match backend: pass roomId as a number (SignalR serializes it properly)
     await activeConnection.invoke("JoinRoom", roomId);
   } catch (err) {
-    console.error("❌ Failed to join room:", err);
+    console.error("Failed to join room:", err);
     throw err;
   }
 
@@ -84,7 +148,6 @@ export const subscribeToMessages = async (
 
   return () => {
     activeConnection.off("ReceiveMessage", handler);
-    // optional cleanup — not required for correctness
     activeConnection.invoke("LeaveRoom", roomId).catch(() => {});
   };
 };

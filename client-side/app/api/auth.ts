@@ -9,7 +9,8 @@ export const Login = async (userRequest: SignInRequestDTO): Promise<string> => {
   try {
     const { username, password } = userRequest;
 
-    // ✅ Basic validation
+    console.log(`${BASE_URL}`);
+
     if (!username?.trim() || !password?.trim()) {
       throw new Error("Username and password are required.");
     }
@@ -23,11 +24,9 @@ export const Login = async (userRequest: SignInRequestDTO): Promise<string> => {
     const token =
       typeof response.data === "string" ? response.data : response.data.token;
 
-    console.log("✅ Login success, received token:", token);
-
     return token;
   } catch (err: any) {
-    console.error("❌ Login failed:", err);
+    console.error("Login failed:", err);
 
     // --- Handle all Axios error variants ---
     if (err.response) {

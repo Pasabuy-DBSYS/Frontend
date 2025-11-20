@@ -27,10 +27,8 @@ export const useOrdersHubStore = create<OrdersHubState>((set, get) => ({
       .configureLogging(signalR.LogLevel.Information)
       .build();
 
-    connection.onreconnecting(() =>
-      console.log("🔄 Reconnecting to OrdersHub")
-    );
-    connection.onreconnected(() => console.log("✅ Reconnected to OrdersHub"));
+    connection.onreconnecting(() => console.log("Reconnecting to OrdersHub"));
+    connection.onreconnected(() => console.log("Reconnected to OrdersHub"));
 
     await connection.start();
     console.log("🟢 OrdersHub connected");
