@@ -10,12 +10,15 @@ import { useOtherUserStore } from "../store/user_store";
 export const useOtherUser = (): UserResponseDTO | null => {
   const { user } = useAuthStore();
   const { activeOrder } = useActiveOrderStore();
-  const { otherUser, setOtherUser } = useOtherUserStore();
+  const { otherUser, setOtherUser, clearOtherUser } = useOtherUserStore();
 
   useEffect(() => {
     const load = async () => {
-      if (!user || !activeOrder) return;
-      if (otherUser) return; // already loaded
+      if (!user || !activeOrder) {
+        // Clear otherUser if no active order
+        if (otherUser) clearOtherUser();
+        return;
+      }
 
       const targetId =
         user.currentRole === Role.COURIER
@@ -24,12 +27,18 @@ export const useOtherUser = (): UserResponseDTO | null => {
 
       if (targetId === 0) return;
 
+      // Check if we already have the correct otherUser loaded
+      if (otherUser && otherUser.userIdPK === targetId) {
+        return; // Already loaded the correct user
+      }
+
+      // Fetch the correct user (new order or different user)
       const targetUser = await getUserById(targetId);
       if (targetUser) setOtherUser(targetUser);
     };
 
     load();
-  }, [user, activeOrder, otherUser, setOtherUser]);
+  }, [user, activeOrder?.orderIdPK]); // Only re-run when order changes
 
   return otherUser;
 };

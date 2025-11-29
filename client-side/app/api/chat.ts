@@ -11,6 +11,8 @@ import {
 } from "./dto/response/chat.response.dto";
 import { useAuthStore } from "./store/auth_store";
 import { useChatsHubStore } from "./store/chat_hub_store";
+import { useMessageRoomState } from "./store/message_room_store";
+
 const BASE_URL = `${API_BASE_URL}/ChatMessages`;
 
 export const postTextMessage = async (
@@ -127,12 +129,13 @@ export const subscribeToMessages = async (
 ): Promise<() => void> => {
   const { connection, initConnection } = useChatsHubStore.getState();
 
+  // Ensure connection is active
   if (!connection || connection.state !== "Connected") {
     await initConnection();
-    console.log(`CONNECTION: ${JSON.stringify(connection)}`);
   }
 
   const activeConnection = useChatsHubStore.getState().connection!;
+
   try {
     await activeConnection.invoke("JoinRoom", roomId);
   } catch (err) {
@@ -140,8 +143,12 @@ export const subscribeToMessages = async (
     throw err;
   }
 
-  const handler = (newMessage: ChatMessagesResponseDTO) => {
+  const handler = async (newMessage: ChatMessagesResponseDTO) => {
+    // 1. Pass message to UI logic
     onReceive(newMessage);
+
+    // 2. Read focus state
+    const isFocused = useMessageRoomState.getState().isFocused;
   };
 
   activeConnection.on("ReceiveMessage", handler);
