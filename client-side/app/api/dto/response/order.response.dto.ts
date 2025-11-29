@@ -23,8 +23,8 @@ export interface OrderResponseDTO {
   request: string;
   status: Status;
   priority: Priority;
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at: string;
   deliveryDetailsDTO: DeliveryDetailsResponseDTO;
   paymentsResponseDTO: PaymentsResponseDTO;
   chatRoomResponseDTO: ChatRoomResponseDTO;
