@@ -90,9 +90,9 @@ export type RootStackParamList = {
   AddNameScreen: undefined;
   VeryifyingAccount: undefined;
 
-  CourierNavigationBar: undefined;
+  CourierNavigationBar: { activeTab: number };
   Home: undefined;
-  CourierTrackingView: { orderId: number };
+  CourierTrackingView: { orderId: number } | { activeTab: number };
   Orders:
     | {
         returnAddress: string;
@@ -106,6 +106,7 @@ export type RootStackParamList = {
   OrderHistory: { mode: HistoryMode } | undefined;
   MessagePage: undefined;
   CustomerTrackingView: { orderId: number };
+  ReviewOrder: undefined;
 };
 
 export type RootNav = NativeStackNavigationProp<RootStackParamList>;

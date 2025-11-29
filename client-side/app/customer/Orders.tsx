@@ -10,8 +10,10 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
-  Button,
   ActivityIndicator,
+  ScrollView,
+  Switch,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,6 +36,31 @@ import { convertCoordinatesToAddress } from "../api/geoapify";
 import { useLocationStore } from "../api/store/location_store";
 import ConfirmOrder from "@/components/modals/ConfirmOrder";
 import { useActiveOrderStore } from "../api/store/order_store";
+import { Button } from "@/components/Button";
+
+const URGENT_FEE = 20; // Additional fee for urgent orders
+const BASE_FEE = 10; // Base delivery fee
+const PER_KM_RATE = 5; // Fee per kilometer
+
+// Haversine formula to calculate distance between two coordinates in kilometers
+const calculateDistance = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number => {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in kilometers
+};
 
 const Orders: React.FC = () => {
   const [deviceLocation, setDeviceLocation] = useState<Coordinates | null>(
@@ -41,7 +68,10 @@ const Orders: React.FC = () => {
   );
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [orderPrice, setOrderPrice] = useState<number>(0);
+  const [deliveryFee, setDeliveryFee] = useState<number>(BASE_FEE);
+  const [distanceKm, setDistanceKm] = useState<number>(0);
+  const [tipAmount, setTipAmount] = useState<string>("");
+  const [isUrgent, setIsUrgent] = useState<boolean>(false);
   const [coordinates, setCoordinates] = useState<Coordinates[]>([]);
   const recentSearched = useRef<GeoapifyFeature[]>([]);
   const mapRef = useRef<MapView>(null);
@@ -63,6 +93,39 @@ const Orders: React.FC = () => {
   } = useLocationStore();
 
   const { user } = useAuthStore();
+
+  // Calculate delivery fee when destination changes (fullLocation is set when user pins location)
+  useEffect(() => {
+    if (
+      deviceLocation &&
+      fullLocation?.returnLocation &&
+      fullLocation.returnLocation.latitude !== 0 &&
+      fullLocation.returnLocation.longitude !== 0
+    ) {
+      const distance = calculateDistance(
+        deviceLocation.latitude,
+        deviceLocation.longitude,
+        fullLocation.returnLocation.latitude,
+        fullLocation.returnLocation.longitude
+      );
+      setDistanceKm(distance);
+
+      // Calculate delivery fee: Base fee + (distance * per km rate)
+      const calculatedFee = BASE_FEE + Math.ceil(distance) * PER_KM_RATE;
+      setDeliveryFee(calculatedFee);
+    } else {
+      setDistanceKm(0);
+      setDeliveryFee(BASE_FEE);
+    }
+  }, [deviceLocation, fullLocation]);
+
+  // Calculate total price
+  const getTotalPrice = (): number => {
+    let total = deliveryFee;
+    if (tipAmount) total += parseFloat(tipAmount) || 0;
+    if (isUrgent) total += URGENT_FEE;
+    return total;
+  };
 
   const postOrderFunction = async (): Promise<void> => {
     try {
@@ -95,9 +158,9 @@ const Orders: React.FC = () => {
       const dto: PostOrderRequestDTO = {
         customerId: user.userIdPK,
         request: commissionData.specification,
-        tipFee: 0,
+        tipFee: tipAmount ? parseFloat(tipAmount) : 0,
         status: 0,
-        priority: 0,
+        priority: isUrgent ? 1 : 0,
         locationLatitude: commissionData.coordinates.latitude,
         locationLongitude: commissionData.coordinates.longitude,
         customerLatitude: deviceLocation?.latitude || 0,
@@ -137,6 +200,72 @@ const Orders: React.FC = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const debounceTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Validation states
+  const [addressError, setAddressError] = useState<string>("");
+  const [specificationError, setSpecificationError] = useState<string>("");
+  const [deliveryInstructionsError, setDeliveryInstructionsError] =
+    useState<string>("");
+
+  // Check if form is valid
+  const isFormValid = () => {
+    const hasAddress = commissionData.address?.trim().length > 0;
+    const hasValidCoordinates =
+      commissionData.coordinates?.latitude !== 0 &&
+      commissionData.coordinates?.longitude !== 0;
+    const hasSpecification = commissionData.specification?.trim().length > 0;
+    const hasDeliveryInstructions =
+      commissionData.deliveryInstructions?.trim().length > 0;
+
+    return (
+      hasAddress &&
+      hasValidCoordinates &&
+      hasSpecification &&
+      hasDeliveryInstructions
+    );
+  };
+
+  // Validate and show confirm modal
+  const handleOrderPress = () => {
+    let hasError = false;
+
+    // Validate address
+    if (!commissionData.address?.trim()) {
+      setAddressError("Address is required");
+      hasError = true;
+    } else if (
+      !commissionData.coordinates?.latitude ||
+      !commissionData.coordinates?.longitude ||
+      commissionData.coordinates.latitude === 0
+    ) {
+      setAddressError("Please select a valid location from the map or search");
+      hasError = true;
+    } else {
+      setAddressError("");
+    }
+
+    // Validate specification
+    if (!commissionData.specification?.trim()) {
+      setSpecificationError("Specification is required");
+      hasError = true;
+    } else {
+      setSpecificationError("");
+    }
+
+    // Validate delivery instructions
+    if (!commissionData.deliveryInstructions?.trim()) {
+      setDeliveryInstructionsError("Delivery instructions are required");
+      hasError = true;
+    } else {
+      setDeliveryInstructionsError("");
+    }
+
+    if (hasError) {
+      return;
+    }
+
+    setShowConfirm(true);
+  };
+
   useEffect(() => {
     let isMounted = true;
     (async () => {
@@ -144,7 +273,7 @@ const Orders: React.FC = () => {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
           Alert.alert("Permission Denied", "Location access is required.");
-          if (isMounted) setIsLoading(false); // ensure loading stops even if denied
+          if (isMounted) setIsLoading(false);
           return;
         }
 
@@ -154,7 +283,7 @@ const Orders: React.FC = () => {
           longitude: current.coords.longitude,
         };
         if (isMounted) {
-          setDeviceLocation(currentCoords); // save device location no matter what
+          setDeviceLocation(currentCoords);
 
           if (fullLocation) {
             setCommissionData({
@@ -175,7 +304,6 @@ const Orders: React.FC = () => {
       } catch (err) {
         console.error("❌ Failed to get device location:", err);
 
-        // 🔸 Provide a fallback (e.g., Manila)
         const fallback = { latitude: 14.5995, longitude: 120.9842 };
         setDeviceLocation(fallback);
         setCommissionData({
@@ -191,7 +319,7 @@ const Orders: React.FC = () => {
         );
       } finally {
         if (isMounted) {
-          setIsLoading(false); // ✅ always stop loading
+          setIsLoading(false);
           console.log("✅ Location initialization complete");
         }
       }
@@ -229,10 +357,8 @@ const Orders: React.FC = () => {
 
   const handleAddressChange = useCallback(
     (text: string) => {
-      // Update the store immediately
       setCommissionData({ address: text });
 
-      // Debounce the autocomplete fetch
       if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
 
       debounceTimeout.current = setTimeout(() => {
@@ -243,71 +369,111 @@ const Orders: React.FC = () => {
         }
       }, 300);
     },
-    [fetchAutocomplete, setCommissionData] // ✅ include the store setter in deps
+    [fetchAutocomplete, setCommissionData]
   );
 
   const navigation = useNavigation<any>();
 
   return (
-    <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+    <KeyboardAvoidingView style={{ flex: 1 }}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <LinearGradient
           colors={["#545EE1", "#FFFFFF"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
-          style={{ flex: 1, paddingHorizontal: 20, paddingTop: "10%" }}
+          style={{ flex: 1 }}
         >
-          {/* Header */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              marginTop: "10%",
-            }}
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 120 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={{ fontSize: 35, fontWeight: "bold", color: "white" }}>
-              Commission
-            </Text>
-          </View>
-
-          <Text style={{ fontSize: 18, color: "white", marginBottom: 10 }}>
-            Enter details for commission
-          </Text>
-          <Text style={{ color: "#FFD966", fontSize: 12, marginBottom: 5 }}>
-            NOTE: Delivery fee may vary depending on location.
-          </Text>
-          {isLoading ? (
-            <ActivityIndicator
+            {/* Header */}
+            <View
               style={{
-                width: "100%",
-                height: 200,
-                borderRadius: 10,
-                marginBottom: 15,
+                paddingHorizontal: 20,
+                paddingTop: Platform.OS === "android" ? 50 : 60,
               }}
-              size="large"
-              color="#545EE1"
-            />
-          ) : (
-            deviceLocation && (
-              <MapView
-                ref={mapRef}
+            >
+              <Text
+                style={{ fontSize: 28, fontWeight: "bold", color: "white" }}
+              >
+                Commission
+              </Text>
+            </View>
+
+            {/* Location Cards */}
+            <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
+              {/* Pick-up Location Card */}
+              <TouchableOpacity
                 style={{
-                  width: "100%",
-                  height: 200,
-                  borderRadius: 10,
-                  marginBottom: 15,
+                  backgroundColor: "rgba(255,255,255,0.95)",
+                  borderRadius: 16,
+                  padding: 16,
+                  marginBottom: 12,
+                  flexDirection: "row",
+                  alignItems: "center",
                 }}
-                initialRegion={{
-                  latitude:
-                    fullLocation?.returnLocation.latitude ??
-                    deviceLocation.latitude,
-                  longitude:
-                    fullLocation?.returnLocation.longitude ??
-                    deviceLocation.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
+                disabled
+              >
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    borderWidth: 3,
+                    borderColor: "#545EE1",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginRight: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: "#545EE1",
+                    }}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: "#545EE1",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Pick-up location
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      color: "#333",
+                      fontWeight: "500",
+                      marginTop: 2,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {deviceLocation
+                      ? "Your current location"
+                      : "Getting location..."}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#999" />
+              </TouchableOpacity>
+
+              {/* Destination Card */}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.95)",
+                  borderRadius: 16,
+                  padding: 16,
+                  flexDirection: "row",
+                  alignItems: "center",
                 }}
-                // Allow panning and zooming freely — not a controlled region
                 onPress={() =>
                   navigation.navigate("LocationPicker", {
                     returnAddress: commissionData.address,
@@ -315,165 +481,467 @@ const Orders: React.FC = () => {
                       deviceLocation || { latitude: 0, longitude: 0 },
                   })
                 }
-              ></MapView>
-            )
-          )}
-          {/* Inputs */}
-          <View style={{ marginTop: 10 }}>
-            <Text style={{ color: "white", fontSize: 14, marginBottom: 5 }}>
-              Address *
-            </Text>
-            <TextInput
-              placeholder="Address"
-              placeholderTextColor="#BFC5FF"
-              value={commissionData.address}
-              onChangeText={handleAddressChange}
-              style={{
-                backgroundColor: "white",
-                borderRadius: 8,
-                padding: 10,
-                marginBottom: 5,
-              }}
-            />
-            <Button
-              title="Clear"
-              onPress={() => {
-                setCommissionData({
-                  address: "",
-                  specification: "",
-                  deliveryInstructions: "",
-                  coordinates: { latitude: 0, longitude: 0 },
-                });
-                setSearchResults([]);
-                recentSearched.current = [];
-              }}
-            />
-            <View
-              style={{
-                backgroundColor: "white",
-                borderRadius: 8,
-                maxHeight: 160,
-                marginBottom: 10,
-              }}
-            >
-              <FlatList
-                keyboardShouldPersistTaps="handled"
-                data={searchResults}
-                keyExtractor={(item) => item.properties.place_id}
-                renderItem={({ item }) => {
-                  const distance = item.properties.distance ?? null;
-                  let distanceLabel = "";
-                  if (distance !== null) {
-                    if (distance >= 1000) {
-                      distanceLabel = `${(distance / 1000).toFixed(1)} km away`;
-                    } else {
-                      distanceLabel = `${Math.round(distance)} m away`;
+              >
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: "#545EE1",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginRight: 12,
+                  }}
+                >
+                  <Ionicons name="location" size={18} color="white" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: "#545EE1",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Destination
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      color: commissionData.address ? "#333" : "#999",
+                      fontWeight: "500",
+                      marginTop: 2,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {commissionData.address || "Where to deliver?"}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#999" />
+              </TouchableOpacity>
+              {addressError ? (
+                <Text style={{ color: "#DC143C", fontSize: 12, marginTop: 5 }}>
+                  {addressError}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Search Results */}
+            {searchResults.length > 0 && (
+              <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
+                <View
+                  style={{
+                    backgroundColor: "white",
+                    borderRadius: 12,
+                    maxHeight: 160,
+                    overflow: "hidden",
+                  }}
+                >
+                  <FlatList
+                    keyboardShouldPersistTaps="handled"
+                    data={searchResults}
+                    keyExtractor={(item) => item.properties.place_id}
+                    renderItem={({ item }) => {
+                      const distance = item.properties.distance ?? null;
+                      let distanceLabel = "";
+                      if (distance !== null) {
+                        if (distance >= 1000) {
+                          distanceLabel = `${(distance / 1000).toFixed(
+                            1
+                          )} km away`;
+                        } else {
+                          distanceLabel = `${Math.round(distance)} m away`;
+                        }
+                      }
+                      return (
+                        <TouchableOpacity
+                          onPress={() => {
+                            setFullLocation({
+                              returnAddress: item.properties.formatted,
+                              returnLocation: {
+                                latitude: item.geometry.coordinates[1],
+                                longitude: item.geometry.coordinates[0],
+                              },
+                            });
+                            navigation.navigate("LocationPicker");
+                          }}
+                          style={{
+                            paddingVertical: 12,
+                            paddingHorizontal: 14,
+                            borderBottomWidth: 0.5,
+                            borderColor: "#eee",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#333",
+                              fontWeight: "600",
+                              fontSize: 14,
+                            }}
+                          >
+                            {item.properties.formatted}
+                          </Text>
+                          {item.properties.distance && (
+                            <Text
+                              style={{
+                                color: "#888",
+                                fontSize: 12,
+                                marginTop: 2,
+                              }}
+                            >
+                              {distanceLabel}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    }}
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Details Section */}
+            <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
+              <View
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.95)",
+                  borderRadius: 16,
+                  padding: 16,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    marginBottom: 16,
+                  }}
+                >
+                  <Ionicons name="options" size={20} color="#545EE1" />
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: "#333",
+                      marginLeft: 10,
+                    }}
+                  >
+                    Details
+                  </Text>
+                </View>
+
+                {/* Specification Input */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text
+                    style={{ fontSize: 13, color: "#666", marginBottom: 6 }}
+                  >
+                    Order Specification *
+                  </Text>
+                  <TextInput
+                    placeholder="e.g., 2 pcs Chicken, 1 Rice"
+                    placeholderTextColor="#999"
+                    value={commissionData.specification}
+                    onChangeText={(val) => {
+                      setCommissionData({ specification: val });
+                      if (val.trim()) setSpecificationError("");
+                    }}
+                    style={{
+                      backgroundColor: "#F5F5F5",
+                      borderRadius: 10,
+                      padding: 12,
+                      fontSize: 14,
+                      color: "#333",
+                      minHeight: 60,
+                      textAlignVertical: "top",
+                      borderWidth: specificationError ? 1 : 0,
+                      borderColor: "#DC143C",
+                    }}
+                    multiline
+                  />
+                  {specificationError ? (
+                    <Text
+                      style={{ color: "#DC143C", fontSize: 12, marginTop: 4 }}
+                    >
+                      {specificationError}
+                    </Text>
+                  ) : null}
+                </View>
+
+                {/* Delivery Instructions */}
+                <View>
+                  <Text
+                    style={{ fontSize: 13, color: "#666", marginBottom: 6 }}
+                  >
+                    Delivery Instructions *
+                  </Text>
+                  <TextInput
+                    placeholder="Room code, Building, landmarks, etc."
+                    placeholderTextColor="#999"
+                    value={commissionData.deliveryInstructions}
+                    onChangeText={(val) => {
+                      setCommissionData({ deliveryInstructions: val });
+                      if (val.trim()) setDeliveryInstructionsError("");
+                    }}
+                    style={{
+                      backgroundColor: "#F5F5F5",
+                      borderRadius: 10,
+                      padding: 12,
+                      fontSize: 14,
+                      color: "#333",
+                      borderWidth: deliveryInstructionsError ? 1 : 0,
+                      borderColor: "#DC143C",
+                    }}
+                    multiline
+                  />
+                  {deliveryInstructionsError ? (
+                    <Text
+                      style={{ color: "#DC143C", fontSize: 12, marginTop: 4 }}
+                    >
+                      {deliveryInstructionsError}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+
+            {/* Payment & Options Row */}
+            <View style={{ paddingHorizontal: 20, marginTop: 12 }}>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                {/* Tip Input */}
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    backgroundColor: "rgba(255,255,255,0.95)",
+                    borderRadius: 16,
+                    padding: 14,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                  activeOpacity={1}
+                >
+                  <Ionicons name="heart" size={18} color="#545EE1" />
+                  <Text style={{ fontSize: 14, color: "#333", marginLeft: 8 }}>
+                    Tip ₱
+                  </Text>
+                  <TextInput
+                    placeholder="0"
+                    placeholderTextColor="#999"
+                    value={tipAmount}
+                    onChangeText={(val) =>
+                      setTipAmount(val.replace(/[^0-9.]/g, ""))
                     }
-                  }
-                  return (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setFullLocation({
-                          returnAddress: item.properties.formatted,
-                          returnLocation: {
-                            latitude: item.geometry.coordinates[1],
-                            longitude: item.geometry.coordinates[0],
-                          },
-                        });
-                        navigation.navigate("LocationPicker");
-                      }}
+                    keyboardType="numeric"
+                    style={{
+                      flex: 1,
+                      fontSize: 14,
+                      color: "#333",
+                      marginLeft: 4,
+                      padding: 0,
+                    }}
+                  />
+                </TouchableOpacity>
+
+                {/* Urgent Toggle */}
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    backgroundColor: isUrgent
+                      ? "#545EE1"
+                      : "rgba(255,255,255,0.95)",
+                    borderRadius: 16,
+                    padding: 14,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                  onPress={() => setIsUrgent(!isUrgent)}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Ionicons
+                      name="flash"
+                      size={18}
+                      color={isUrgent ? "white" : "#FF9800"}
+                    />
+                    <Text
                       style={{
-                        paddingVertical: 10,
-                        paddingHorizontal: 12,
-                        borderBottomWidth: 0.5,
-                        borderColor: "#ccc",
+                        fontSize: 14,
+                        color: isUrgent ? "white" : "#333",
+                        marginLeft: 8,
+                        fontWeight: "500",
                       }}
                     >
-                      <Text style={{ color: "#333", fontWeight: "600" }}>
-                        {item.properties.formatted}
-                      </Text>
-
-                      {item.properties.distance && (
-                        <Text style={{ color: "#666", fontSize: 12 }}>
-                          {distanceLabel}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  );
-                }}
-              />
+                      Urgent
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      borderWidth: 2,
+                      borderColor: isUrgent ? "white" : "#ccc",
+                      backgroundColor: isUrgent ? "white" : "transparent",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    {isUrgent && (
+                      <Ionicons name="checkmark" size={14} color="#545EE1" />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              </View>
             </View>
-            {/* Autocomplete Dropdown */}
-            {/* Specification */}
-            <Text style={{ color: "white", fontSize: 14, marginBottom: 5 }}>
-              Specification *
-            </Text>
-            <TextInput
-              placeholder="Order Specification"
-              placeholderTextColor="#BFC5FF"
-              value={commissionData.specification}
-              onChangeText={(val) => setCommissionData({ specification: val })}
-              style={{
-                backgroundColor: "white",
-                borderRadius: 8,
-                padding: 10,
-                marginBottom: 10,
-              }}
-            />
 
-            <Text style={{ color: "white", fontSize: 14, marginBottom: 5 }}>
-              Delivery Instructions:
-            </Text>
-            <TextInput
-              placeholder="Example: Room code, Building, etc."
-              placeholderTextColor="#BFC5FF"
-              value={commissionData.deliveryInstructions}
-              onChangeText={(val) =>
-                setCommissionData({ deliveryInstructions: val })
-              }
-              style={{
-                backgroundColor: "white",
-                borderRadius: 8,
-                padding: 10,
-                marginBottom: 15,
-              }}
-              multiline
-            />
-          </View>
+            {/* Price Breakdown */}
+            <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+              <View
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.95)",
+                  borderRadius: 16,
+                  padding: 16,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "600",
+                    color: "#333",
+                    marginBottom: 12,
+                  }}
+                >
+                  Price Breakdown
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    marginBottom: 6,
+                  }}
+                >
+                  <Text style={{ color: "#666", fontSize: 13 }}>
+                    Delivery Fee ({distanceKm.toFixed(1)} km)
+                  </Text>
+                  <Text
+                    style={{ color: "#333", fontSize: 13, fontWeight: "500" }}
+                  >
+                    ₱{deliveryFee}
+                  </Text>
+                </View>
+                {tipAmount && parseFloat(tipAmount) > 0 && (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      marginBottom: 6,
+                    }}
+                  >
+                    <Text style={{ color: "#666", fontSize: 13 }}>Tip</Text>
+                    <Text
+                      style={{ color: "#333", fontSize: 13, fontWeight: "500" }}
+                    >
+                      ₱{parseFloat(tipAmount)}
+                    </Text>
+                  </View>
+                )}
+                {isUrgent && (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      marginBottom: 6,
+                    }}
+                  >
+                    <Text style={{ color: "#FF9800", fontSize: 13 }}>
+                      ⚡ Urgent Fee
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#FF9800",
+                        fontSize: 13,
+                        fontWeight: "500",
+                      }}
+                    >
+                      ₱{URGENT_FEE}
+                    </Text>
+                  </View>
+                )}
+                <View
+                  style={{
+                    height: 1,
+                    backgroundColor: "#eee",
+                    marginVertical: 8,
+                  }}
+                />
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Text
+                    style={{ color: "#333", fontSize: 15, fontWeight: "700" }}
+                  >
+                    Total
+                  </Text>
+                  <Text
+                    style={{
+                      color: "#545EE1",
+                      fontSize: 15,
+                      fontWeight: "700",
+                    }}
+                  >
+                    ₱{getTotalPrice()}
+                  </Text>
+                </View>
+              </View>
+            </View>
 
-          {/* Order Button */}
-          <TouchableOpacity
-            style={{
-              backgroundColor: "#3C49B8",
-              paddingVertical: 15,
-              borderRadius: 20,
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              paddingHorizontal: 25,
-              marginTop: 10,
+            {/* Order Button */}
+            <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: isFormValid() ? "#545EE1" : "#999",
+                  paddingVertical: 16,
+                  borderRadius: 28,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingHorizontal: 24,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 8,
+                  elevation: 5,
+                }}
+                onPress={handleOrderPress}
+              >
+                <Text
+                  style={{ color: "white", fontWeight: "700", fontSize: 16 }}
+                >
+                  ₱{getTotalPrice()}
+                </Text>
+                <Text
+                  style={{ color: "white", fontWeight: "bold", fontSize: 18 }}
+                >
+                  Order
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+
+          <ConfirmOrder
+            visible={showConfirm}
+            title="Confirm Order"
+            message="Do you want to submit this order request?"
+            confirmText="Submit Order"
+            cancelText="Cancel"
+            onConfirm={() => {
+              setShowConfirm(false);
+              postOrderFunction();
             }}
-            onPress={() => setShowConfirm(true)}
-          >
-            <ConfirmOrder
-              visible={showConfirm}
-              title="Confirm Order"
-              message="Do you want to submit this order request?"
-              confirmText="Submit Order"
-              cancelText="Cancel"
-              onConfirm={() => {
-                setShowConfirm(false);
-                postOrderFunction();
-              }}
-              onCancel={() => setShowConfirm(false)}
-            />
-            <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
-              ₱ {orderPrice} Delivery Fee
-            </Text>
-            <Text style={{ color: "white", fontWeight: "bold", fontSize: 18 }}>
-              Order
-            </Text>
-          </TouchableOpacity>
+            onCancel={() => setShowConfirm(false)}
+          />
         </LinearGradient>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>

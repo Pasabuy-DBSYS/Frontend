@@ -2,9 +2,9 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,8 +12,11 @@ import ProfileButtons from "@/components/ProfileButtons";
 import { useAuthStore } from "@/app/api/store/auth_store";
 import { UserResponseDTO } from "@/app/api/dto/response/auth.response.dto";
 import ProfilePhotoModal from "./modals/ChangeProfile";
+import CachedImage from "./CachedImage";
+import { useNavigation } from "@react-navigation/native";
 
 const Profile = () => {
+  const navigation = useNavigation();
   const { user } = useAuthStore();
 
   const [isChangeProfile, setIsChangeProfile] = useState(false);
@@ -21,13 +24,11 @@ const Profile = () => {
 
   return (
     <LinearGradient
-      colors={["#545EE1", "#FFFFFF"]}
+      colors={["#545EE1", "#A8B0FF"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       style={{
         flex: 1,
-        paddingHorizontal: 20,
-        paddingTop: "10%",
       }}
     >
       <ProfilePhotoModal
@@ -36,53 +37,139 @@ const Profile = () => {
         setGlobalLoading={setGlobalLoading}
       />
 
-      <TouchableOpacity
+      {/* Header with Back Button */}
+      <View
         style={{
-          position: "absolute",
-          top: 55,
-          left: 20,
-          zIndex: 10,
+          paddingHorizontal: 20,
+          paddingTop: Platform.OS === "android" ? 50 : 60,
+          flexDirection: "row",
+          alignItems: "center",
         }}
       >
-        <Ionicons name="chevron-back" size={28} color="#fff" />
-      </TouchableOpacity>
-
-      <View style={{ alignItems: "center", marginTop: 60 }}>
-        <Text style={{ color: "#FFFFFF", fontWeight: "bold", fontSize: 20 }}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: "rgba(255,255,255,0.2)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Ionicons name="chevron-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text
+          style={{
+            flex: 1,
+            textAlign: "center",
+            color: "#FFFFFF",
+            fontWeight: "bold",
+            fontSize: 20,
+            marginRight: 36,
+          }}
+        >
           PROFILE
         </Text>
       </View>
 
+      {/* Profile Picture and Info */}
       <View style={{ alignItems: "center", marginTop: 30 }}>
-        <TouchableOpacity onPress={() => setIsChangeProfile(true)}>
-          <Image
-            source={{
-              uri: `https://pasabuyres.s3.ap-southeast-2.amazonaws.com/${user?.profilePictureKey}`,
-            }}
+        <TouchableOpacity
+          onPress={() => setIsChangeProfile(true)}
+          style={{
+            position: "relative",
+          }}
+        >
+          <View
             style={{
-              width: 100,
-              height: 100,
-              borderRadius: 50,
-              marginBottom: 15,
-              backgroundColor: "#eee",
+              width: 120,
+              height: 120,
+              borderRadius: 60,
+              backgroundColor: "#E8D4F0",
+              justifyContent: "center",
+              alignItems: "center",
+              borderWidth: 4,
+              borderColor: "rgba(255,255,255,0.5)",
             }}
-          />
+          >
+            <CachedImage
+              s3Key={user?.profilePictureKey ?? ""}
+              style={{
+                width: 112,
+                height: 112,
+                borderRadius: 56,
+                backgroundColor: "#E8D4F0",
+              }}
+              disableModal={true}
+            />
+          </View>
+          {/* Camera Icon */}
+          <View
+            style={{
+              position: "absolute",
+              bottom: 0,
+              right: 0,
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: "#545EE1",
+              justifyContent: "center",
+              alignItems: "center",
+              borderWidth: 2,
+              borderColor: "#fff",
+            }}
+          >
+            <Ionicons name="camera" size={16} color="#fff" />
+          </View>
         </TouchableOpacity>
 
-        <Text style={{ fontSize: 20, fontWeight: "bold", color: "#000" }}>
+        <Text
+          style={{
+            fontSize: 22,
+            fontWeight: "bold",
+            color: "#FFFFFF",
+            marginTop: 16,
+          }}
+        >
           {user?.firstName} {user?.lastName}
         </Text>
 
-        <Text style={{ fontSize: 14, color: "#444", marginTop: 3 }}>
+        <Text
+          style={{
+            fontSize: 14,
+            color: "rgba(255,255,255,0.9)",
+            marginTop: 4,
+          }}
+        >
           {user?.email}
         </Text>
 
-        <Text style={{ fontSize: 14, color: "#444", marginTop: 2 }}>
-          +63{user?.phone.substring(1, user.phone.length - 1)}
+        <Text
+          style={{
+            fontSize: 14,
+            color: "rgba(255,255,255,0.9)",
+            marginTop: 2,
+          }}
+        >
+          +63 {user?.phone?.substring(1)}
         </Text>
       </View>
 
-      <ProfileButtons users={user as UserResponseDTO} />
+      {/* Profile Buttons Container */}
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#F5F5F5",
+          marginTop: 30,
+          borderTopLeftRadius: 30,
+          borderTopRightRadius: 30,
+          paddingTop: 30,
+          paddingHorizontal: 20,
+        }}
+      >
+        <ProfileButtons users={user as UserResponseDTO} />
+      </View>
 
       {/* Global Loading Overlay */}
       {globalLoading && (

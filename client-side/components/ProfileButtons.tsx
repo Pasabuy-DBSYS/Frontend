@@ -1,17 +1,80 @@
 import { UserResponseDTO } from "@/app/api/dto/response/auth.response.dto";
 import { useAuthStore } from "@/app/api/store/auth_store";
-import { Button } from "@/components/Button"; // adjust import path
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
-import { View } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import ConfirmLogout from "./modals/ConfirmLogout";
-import NextArrowIcon from "./svg/NextArrowIcon";
-import UpdateInsuranceIcon from "./svg/UpdateInsuranceIcon";
 
 type ProfileProp = {
   users: UserResponseDTO;
 };
+
+interface ProfileButtonItemProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  isLogout?: boolean;
+}
+
+const ProfileButtonItem: React.FC<ProfileButtonItemProps> = ({
+  icon,
+  label,
+  onPress,
+  isLogout = false,
+}) => (
+  <TouchableOpacity
+    onPress={onPress}
+    activeOpacity={0.7}
+    style={{
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#FFFFFF",
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+      borderRadius: 16,
+      marginBottom: 12,
+      shadowColor: "#000",
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 3,
+    }}
+  >
+    <View
+      style={{
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: isLogout ? "#FEE2E2" : "#E8EBFF",
+        justifyContent: "center",
+        alignItems: "center",
+        marginRight: 14,
+      }}
+    >
+      <Ionicons
+        name={icon}
+        size={20}
+        color={isLogout ? "#DC2626" : "#545EE1"}
+      />
+    </View>
+    <Text
+      style={{
+        flex: 1,
+        fontSize: 16,
+        fontWeight: "500",
+        color: isLogout ? "#DC2626" : "#333",
+      }}
+    >
+      {label}
+    </Text>
+    <Ionicons
+      name="chevron-forward"
+      size={20}
+      color={isLogout ? "#DC2626" : "#545EE1"}
+    />
+  </TouchableOpacity>
+);
 
 const ProfileButtons = ({ users }: ProfileProp) => {
   const navigation = useNavigation<any>();
@@ -19,218 +82,65 @@ const ProfileButtons = ({ users }: ProfileProp) => {
 
   const { logout, user } = useAuthStore();
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Welcome" as never }],
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
+
   return (
-    <View style={{ marginTop: 40, gap: 30 }}>
-      {/* 1. Update Insurance */}
-      <View
-        style={{
-          position: "relative",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 4.65,
-          elevation: 8,
+    <View style={{ flex: 1 }}>
+      <ConfirmLogout
+        visible={logoutModal}
+        onCancel={() => setLogoutModal(false)}
+        onConfirm={() => {
+          setLogoutModal(false);
+          handleLogout();
         }}
-      >
-        <UpdateInsuranceIcon
-          style={{
-            position: "absolute",
-            left: 25,
-            top: "50%",
-            transform: [{ translateY: -11 }],
-            zIndex: 2,
-          }}
-        />
-        <NextArrowIcon
-          style={{
-            position: "absolute",
-            right: "3%",
-            top: "55%",
-            transform: [{ translateY: -11 }],
-            zIndex: 2,
-          }}
-        />
-        <Button
-          title="Update Insurance"
-          onPress={() =>
-            navigation.navigate("InsuranceVerification" as never, {
-              title: "Update Insurance",
-            })
-          }
-          backgroundColor="#FFFFFF"
-          textColor="#000"
-          borderColor="#fff"
-          borderWidth={1}
-          borderRadius={20}
-          fontSize={16}
-          fontWeight="500"
-          padding={15}
-          showArrow={true}
-          width="100%"
-        />
-      </View>
+      />
 
-      {/* 2. Term and Conditions */}
-      <View
-        style={{
-          position: "relative",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 4.65,
-          elevation: 8,
-        }}
-      >
-        <Ionicons
-          name="document-text-outline"
-          size={22}
-          color="#545EE1"
-          style={{
-            position: "absolute",
-            left: 25,
-            top: "50%",
-            transform: [{ translateY: -11 }],
-            zIndex: 2,
-          }}
-        />
-        <Button
-          title="Term and Conditions"
-          onPress={() => console.log("Term and Conditions pressed")}
-          backgroundColor="#FFFFFF"
-          textColor="#000"
-          borderColor="#fff"
-          borderWidth={1}
-          borderRadius={20}
-          fontSize={16}
-          fontWeight="500"
-          padding={15}
-          showArrow={true}
-          width="100%"
-        />
-        <NextArrowIcon
-          style={{
-            position: "absolute",
-            right: "3%",
-            top: "55%",
-            transform: [{ translateY: -11 }],
-            zIndex: 2,
-          }}
-        />
-      </View>
+      {/* Update Insurance */}
+      <ProfileButtonItem
+        icon="shield-checkmark-outline"
+        label="Update Insurance"
+        onPress={() =>
+          navigation.navigate("InsuranceVerification" as never, {
+            title: "Update Insurance",
+          })
+        }
+      />
 
-      {/* 3. Settings */}
-      <View
-        style={{
-          position: "relative",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 4.65,
-          elevation: 8,
-        }}
-      >
-        <Ionicons
-          name="settings-outline"
-          size={22}
-          color="#545EE1"
-          style={{
-            position: "absolute",
-            left: 25,
-            top: "50%",
-            transform: [{ translateY: -11 }],
-            zIndex: 2,
-          }}
-        />
-        <Button
-          title="Settings"
-          onPress={() =>
-            navigation.navigate("Settings" as never, {
-              user: user,
-            })
-          }
-          backgroundColor="#FFFFFF"
-          textColor="#000"
-          borderColor="#fff"
-          borderWidth={1}
-          borderRadius={20}
-          fontSize={16}
-          fontWeight="500"
-          padding={15}
-          showArrow={true}
-          width="100%"
-        />
-        <NextArrowIcon
-          style={{
-            position: "absolute",
-            right: "3%",
-            top: "55%",
-            transform: [{ translateY: -11 }],
-            zIndex: 2,
-          }}
-        />
-      </View>
+      {/* Terms and Conditions */}
+      <ProfileButtonItem
+        icon="document-text-outline"
+        label="Term and Conditions"
+        onPress={() => console.log("Term and Conditions pressed")}
+      />
 
-      {/* 4. Logout */}
-      <View
-        style={{
-          position: "relative",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 4.65,
-          elevation: 8,
-        }}
-      >
-        <ConfirmLogout
-          visible={logoutModal}
-          onCancel={() => {
-            setLogoutModal(false);
-          }}
-          onConfirm={async () => {
-            setLogoutModal(false);
-            await logout();
-            navigation.reset({
-              index: 0,
-              routes: [{ name: "Welcome" as never }],
-            });
-          }}
-        />
-        <Ionicons
-          name="arrow-undo-outline"
-          size={22}
-          color="#545EE1"
-          style={{
-            position: "absolute",
-            left: 25,
-            top: "50%",
-            transform: [{ translateY: -11 }],
-            zIndex: 2,
-          }}
-        />
-        <Button
-          title="Logout"
-          onPress={() => setLogoutModal(true)}
-          backgroundColor="#FFFFFF"
-          textColor="#000"
-          borderColor="#fff"
-          borderWidth={1}
-          borderRadius={20}
-          fontSize={16}
-          fontWeight="500"
-          padding={15}
-          showArrow={true}
-          width="100%"
-        />
-        <NextArrowIcon
-          style={{
-            position: "absolute",
-            right: "3%",
-            top: "55%",
-            transform: [{ translateY: -11 }],
-            zIndex: 2,
-          }}
-        />
-      </View>
+      {/* Settings */}
+      <ProfileButtonItem
+        icon="settings-outline"
+        label="Settings"
+        onPress={() =>
+          navigation.navigate("Settings" as never, {
+            user: user,
+          })
+        }
+      />
+
+      {/* Logout */}
+      <ProfileButtonItem
+        icon="log-out-outline"
+        label="Logout"
+        onPress={() => setLogoutModal(true)}
+        isLogout={true}
+      />
     </View>
   );
 };
