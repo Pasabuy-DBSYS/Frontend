@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, useRoute } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, Settings, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import GetStartedScreen from "./app/auth/GetStartedScreen";
@@ -24,16 +24,24 @@ import OrderList from "./app/courier/OrderList";
 import CourierHome from "./app/courier/CourierHome";
 import MessagePage from "./components/MessagePage";
 import CustomerTrackingView from "./app/customer/CustomerTrackingView";
+import ReviewOrder from "./components/ReviewOrder";
+import { useRouteStore } from "./app/api/store/route_store";
+import { useOrdersHubStore } from "./app/api/store/orders_hub_store";
+import { useActiveOrderStore } from "./app/api/store/order_store";
+import Home from "./app/customer/CustomerHome";
+import Settings from "./components/Settings";
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   const { token, user, checkTokenValidity, refreshUser } = useAuthStore();
   const [initialRoute, setInitialRoute] = useState<string | null>(null);
-
   useEffect(() => {
     const init = async () => {
       try {
+        const { initConnection, invokeHub, disconnect } =
+          useOrdersHubStore.getState();
+        const { rehydrateActiveOrder } = useActiveOrderStore.getState();
         const hasVisited = await AsyncStorage.getItem("hasVisited");
 
         // 🔹 First-time launch or after clear cache
@@ -47,6 +55,9 @@ export default function App() {
         const valid = checkTokenValidity();
         if (!valid) {
           setInitialRoute("Welcome"); // or "LoginScreen"
+          await AsyncStorage.removeItem("active-order-storage");
+          await AsyncStorage.removeItem("message-room-participants");
+          await disconnect();
           return;
         }
 
@@ -54,10 +65,22 @@ export default function App() {
         await refreshUser();
         const updatedUser = useAuthStore.getState().user;
 
+        // 🔹 Rehydrate active order from server (not local storage)
+        await rehydrateActiveOrder();
+        console.log("[rehydrate] Active order synced from server");
+
+        await initConnection();
+
         if (updatedUser?.currentRole === Role.COURIER) {
           setInitialRoute("CourierNavigationBar");
+          console.log("[HUB][COURIER] Connecting OrdersHub + JoinCourierGroup");
+          await invokeHub("JoinCourierGroup");
         } else if (updatedUser?.currentRole === Role.CUSTOMER) {
           setInitialRoute("CustomerNavigationBar");
+          console.log(
+            "[HUB][CUSTOMER] Connecting OrdersHub + JoinCustomerGroup"
+          );
+          await invokeHub("JoinCustomerGroup");
         } else {
           setInitialRoute("Welcome");
         }
@@ -116,6 +139,8 @@ export default function App() {
         <Stack.Screen name="OrderHistory" component={OrderHistory} />
         <Stack.Screen name="CourierHome" component={CourierHome} />
         <Stack.Screen name="OrderList" component={OrderList} />
+        <Stack.Screen name="CustomerHome" component={Home} />
+        <Stack.Screen name="Settings" component={Settings} />
         <Stack.Screen
           name="CourierTrackingView"
           component={CourierTrackingView}
@@ -125,6 +150,7 @@ export default function App() {
           name="CustomerTrackingView"
           component={CustomerTrackingView}
         ></Stack.Screen>
+        <Stack.Screen name="ReviewOrder" component={ReviewOrder} />
       </Stack.Navigator>
     </NavigationContainer>
   );

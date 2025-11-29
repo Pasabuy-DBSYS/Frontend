@@ -39,7 +39,6 @@ const LoginScreen = () => {
       // 🔹 Save token & user profile
       await login(token);
 
-      Alert.alert("✅ Success", "Logged in successfully!");
       const role = useAuthStore.getState().user?.currentRole;
       const routeName =
         role === Role.COURIER

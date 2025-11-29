@@ -24,8 +24,6 @@ export default function ParticipantHeader({
 }: Props) {
   if (!participant) return null;
 
-  console.log(participant.avatarUrl);
-
   const initials = participant.name
     .split(" ")
     .map((part) => part[0])

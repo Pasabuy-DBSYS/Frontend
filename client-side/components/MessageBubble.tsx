@@ -1,6 +1,7 @@
 import { MessageTypes } from "@/app/api/dto/response/chat.response.dto";
 import React from "react";
 import { Image, Text, View } from "react-native";
+import CachedImage from "./CachedImage";
 
 type MessageBubbleProps = {
   text?: string; // for TEXT messages
@@ -30,15 +31,13 @@ export default function MessageBubble({
       }}
     >
       {!isMe && avatarUrl && (
-        <Image
-          source={{
-            uri: `https://pasabuyres.s3.ap-southeast-2.amazonaws.com/${avatarUrl}`,
-          }}
+        <CachedImage
+          s3Key={avatarUrl}
           style={{ width: 40, height: 40, borderRadius: 20, marginRight: 10 }}
         />
       )}
 
-      {messageType === 1 ? (
+      {messageType === MessageTypes.IMAGE ? (
         <View
           style={{
             maxWidth: "75%",
@@ -47,14 +46,12 @@ export default function MessageBubble({
             marginLeft: isMe ? 40 : 0,
           }}
         >
-          <Image
-            source={{
-              uri: `https://pasabuyres.s3.ap-southeast-2.amazonaws.com/${text}`,
-            }}
+          <CachedImage
+            s3Key={text ?? ""}
             style={{
-              width: 240, // or dynamic
-              height: 240, // or dynamic
-              resizeMode: "cover",
+              width: 240,
+              height: 240,
+              borderRadius: 12,
             }}
           />
         </View>

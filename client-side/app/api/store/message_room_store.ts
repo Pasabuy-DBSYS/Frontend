@@ -19,6 +19,10 @@ export interface RoomInfo {
 interface MessageRoomState {
   messageRoomParticipants: MessageRoomParticipants | null;
   setMessageRoomParticipants: (request: MessageRoomParticipants) => void;
+
+  // NEW
+  isFocused: boolean;
+  setIsFocused: (value: boolean) => void;
 }
 
 export const useMessageRoomState = create<MessageRoomState>()(
@@ -27,12 +31,17 @@ export const useMessageRoomState = create<MessageRoomState>()(
       messageRoomParticipants: null,
       setMessageRoomParticipants: (request) =>
         set({ messageRoomParticipants: request }),
+
+      isFocused: false,
+      setIsFocused: (value) => set({ isFocused: value }),
     }),
     {
       name: "message-room-participants",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         messageRoomParticipants: state.messageRoomParticipants,
+
+        isFocused: state.isFocused,
       }),
     }
   )

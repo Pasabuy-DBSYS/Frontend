@@ -67,8 +67,6 @@ export const useAuthStore = create<AuthState>()(
           await useAuthStore.persist.clearStorage();
 
           console.log(`NEW TOKEN: ${get().token}`);
-
-          console.log("✅ Auth store cleared successfully");
         } catch (err) {
           console.error("❌ Error clearing auth store:", err);
         }
@@ -123,9 +121,17 @@ export const useAuthStore = create<AuthState>()(
       },
 
       refreshToken: async (newToken: string) => {
-        await useAuthStore.persist.clearStorage();
-
+        // Set the new token in state
         set({ token: newToken, isAuthenticated: true });
+
+        // Fetch updated user profile with new token
+        try {
+          const user = await getCurrentProfile();
+          set({ user });
+          console.log("✅ Token refreshed and user updated:", user.currentRole);
+        } catch (err) {
+          console.error("Failed to fetch profile after token refresh:", err);
+        }
       },
     }),
     {

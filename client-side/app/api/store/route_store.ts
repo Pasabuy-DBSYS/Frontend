@@ -6,6 +6,7 @@ interface RouteStore {
   cache: Record<number, Coordinates[]>; // key = orderId
   saveRoute: (orderId: number, coords: Coordinates[]) => void;
   getRoute: (orderId: number) => Coordinates[] | null;
+  clearRoute: (orderId: number) => void;
 }
 
 export const useRouteStore = create<RouteStore>((set, get) => ({
@@ -22,4 +23,10 @@ export const useRouteStore = create<RouteStore>((set, get) => ({
   getRoute: (orderId: number) => {
     return get().cache[orderId] ?? null;
   },
+  clearRoute: (orderId: number) =>
+    set((state) => {
+      const newCache = { ...state.cache };
+      delete newCache[orderId];
+      return { cache: newCache };
+    }),
 }));

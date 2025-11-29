@@ -4,6 +4,7 @@ import { RNFile, UserRequestDTO } from "./dto/request/auth.request.dto";
 import { UserResponseDTO } from "./dto/response/auth.response.dto";
 import { useAuthStore } from "./store/auth_store";
 import { Role } from "@/types/types";
+import { useOrdersHubStore } from "./store/orders_hub_store";
 
 export const getMimeType = (path: string): string => {
   if (!path) return "application/octet-stream";
@@ -102,7 +103,7 @@ export const getCurrentProfile = async (): Promise<UserResponseDTO> => {
     const data = err?.response?.data;
     const msg = data?.message;
 
-    console.error("[acceptOrder] Request Failed", {
+    console.error("[getCurrentProfile] Request Failed", {
       url: err?.config?.url,
       method: err?.config?.method?.toUpperCase(),
       status,
@@ -125,24 +126,41 @@ export const changeRole = async (): Promise<ChangeRoleResponse> => {
     if (!user) throw new Error("User not found in store.");
 
     let targetRole: Role;
+    let currentRoleName: string;
+    let targetRoleName: string;
 
     console.log(`CURRENT ROLE: ${user.currentRole}`);
 
     switch (user.currentRole) {
       case Role.COURIER:
         targetRole = Role.CUSTOMER;
+        currentRoleName = "Courier";
+        targetRoleName = "Customer";
         break;
       case Role.CUSTOMER:
         targetRole = Role.COURIER;
+        currentRoleName = "Customer";
+        targetRoleName = "Courier";
         break;
       default:
         throw new Error("Invalid current role");
     }
 
+    // Leave current role group BEFORE changing role (while token is still valid for current role)
+    try {
+      const { invokeHub, connection } = useOrdersHubStore.getState();
+      if (connection) {
+        console.log(`[HUB] Leaving ${currentRoleName}Group...`);
+        await invokeHub(`Leave${currentRoleName}Group`);
+      }
+    } catch (hubErr) {
+      console.warn("SignalR leave group failed (non-critical):", hubErr);
+    }
+
     console.log("Changing role to:", targetRole);
 
     const changeRoleUrl = `${BASE_URL}/change/role/${targetRole}`;
-    console.log(changeRoleUrl);
+    console.log(`CHANGE ${changeRoleUrl}`);
     const response = await axios.patch(
       changeRoleUrl,
       {}, // no body
@@ -155,6 +173,17 @@ export const changeRole = async (): Promise<ChangeRoleResponse> => {
     );
 
     console.log("Role changed on server:", response.data);
+
+    // Disconnect SignalR so it reconnects with the new token on navigation
+    try {
+      const { disconnect } = useOrdersHubStore.getState();
+      await disconnect();
+      console.log(
+        "[HUB] Disconnected - will reconnect with new role on navigation"
+      );
+    } catch (hubErr) {
+      console.warn("SignalR disconnect failed (non-critical):", hubErr);
+    }
 
     const updatedUser = await getCurrentProfile();
     useAuthStore.setState({ user: updatedUser });

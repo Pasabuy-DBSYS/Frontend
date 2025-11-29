@@ -19,6 +19,9 @@ import Profile from "@/components/Profile";
 import ActiveOrderBanner from "@/components/ActiveOrderBanner";
 import { receiveOrderRealtime } from "../api/orders";
 import { useOrdersHubStore } from "../api/store/orders_hub_store";
+import { useActiveOrderStore } from "../api/store/order_store";
+import { useMessageRoomState } from "../api/store/message_room_store";
+import Notifications from "@/components/Notifications";
 
 const CustomerNavigationBar = () => {
   const [activeTab, setActiveTab] = useState(2);
@@ -40,6 +43,21 @@ const CustomerNavigationBar = () => {
 
     const initRealtime = async () => {
       try {
+        // Restore messageRoomParticipants from persisted activeOrder if present
+        const { activeOrder } = useActiveOrderStore.getState();
+        if (activeOrder?.chatRoomResponseDTO?.roomIdPK) {
+          console.log(
+            `[CUSTOMER] Restoring messageRoomParticipants from persisted activeOrder: roomId=${activeOrder.chatRoomResponseDTO.roomIdPK}`
+          );
+          useMessageRoomState.setState({
+            messageRoomParticipants: {
+              roomId: activeOrder.chatRoomResponseDTO.roomIdPK,
+              senderId: activeOrder.courierId ?? null,
+              receiverId: activeOrder.customerId ?? null,
+            },
+          });
+        }
+
         await receiveOrderRealtime();
         console.log("✅ Connected to OrdersHub for real-time updates");
       } catch (err) {
@@ -86,6 +104,8 @@ const CustomerNavigationBar = () => {
     setActiveTab(index);
   };
 
+  const hideBanner = activeTab === 4;
+
   return (
     <View
       style={{
@@ -93,32 +113,33 @@ const CustomerNavigationBar = () => {
         backgroundColor: "white",
       }}
     >
-      {/* Main Screens */}
+      {/* Content Area - takes full space, content scrolls under navbar */}
       <View
         style={{
           flex: 1,
           backgroundColor: "white",
-          maxHeight: "90%",
-          paddingBottom: "5%",
         }}
       >
         {activeTab === 2 && <Home />}
-        {(activeTab === 0 || navPage) && <Orders />}
+        {activeTab === 0 && <Orders />}
         {activeTab === 3 && <OrderHistory />}
         {activeTab === 4 && <Profile />}
+        {activeTab === 1 && <Notifications />}
       </View>
 
-      {/* Fixed Navbar */}
+      {/* Floating Navigation Bar - always on top */}
       <View
         style={{
           alignItems: "center",
           justifyContent: "center",
           position: "absolute",
           bottom: 50,
-          width: "100%",
+          left: 0,
+          right: 0,
+          zIndex: 999,
+          elevation: 999,
         }}
       >
-        {/* Purple Bar */}
         <View
           style={{
             flexDirection: "row",
@@ -132,8 +153,7 @@ const CustomerNavigationBar = () => {
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.6,
             shadowRadius: 6,
-            elevation: 8,
-            zIndex: 1,
+            elevation: 10,
           }}
         >
           {navItems.map((_, index) => (
@@ -151,7 +171,6 @@ const CustomerNavigationBar = () => {
           ))}
         </View>
 
-        {/* Icon Layer */}
         <View
           style={{
             position: "absolute",
@@ -161,7 +180,8 @@ const CustomerNavigationBar = () => {
             height: 40,
             justifyContent: "space-evenly",
             alignItems: "center",
-            zIndex: 3,
+            zIndex: 1000,
+            elevation: 1000,
             pointerEvents: "none",
           }}
         >
@@ -183,7 +203,7 @@ const CustomerNavigationBar = () => {
                   alignItems: "center",
                 }}
               >
-                <Animated.Text>{item.icon}</Animated.Text>
+                {item.icon}
               </Animated.View>
             </View>
           ))}

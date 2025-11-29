@@ -142,7 +142,7 @@ const OrderList = () => {
 
   return (
     <LinearGradient
-      colors={["#545EE1", "#FFFFFF"]}
+      colors={["#FFFFFF", "#545EE1"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       style={{
@@ -152,12 +152,12 @@ const OrderList = () => {
       }}
     >
       <View style={{ flex: 1 }}>
-        <Text style={{ color: "white", fontWeight: "700", fontSize: 36 }}>
+        <Text style={{ color: "#333", fontWeight: "700", fontSize: 36 }}>
           Orders
         </Text>
         <Text
           style={{
-            color: "white",
+            color: "#888",
             fontWeight: "300",
             fontSize: 18,
             marginBottom: hasOrders ? 20 : 0,
@@ -184,6 +184,7 @@ const OrderList = () => {
             data={orders}
             keyExtractor={(item) => item.orderIdPK.toString()}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+            contentContainerStyle={{ paddingBottom: 100 }}
             renderItem={({ item }) => {
               if (item.customerId === user?.userIdPK) {
                 return null;
