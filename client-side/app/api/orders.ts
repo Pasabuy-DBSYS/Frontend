@@ -4,7 +4,7 @@ import {
   AcceptOrderRequestDTO,
   PostOrderRequestDTO,
 } from "./dto/request/order.request.dto";
-import { OrderResponseDTO } from "./dto/response/auth.response.dto";
+import { OrderResponseDTO } from "./dto/response/order.response.dto";
 import { Status } from "./dto/response/order.response.dto";
 import { useAuthStore } from "./store/auth_store";
 import { GEOAPIFY_KEY } from "@env";
@@ -17,6 +17,10 @@ import { useOrdersHubStore } from "./store/orders_hub_store";
 import { useChatsHubStore } from "./store/chat_hub_store";
 import { getUserById } from "./user";
 import { useOtherUser } from "./hook/useOtherUser";
+import { useRouteStore } from "./store/route_store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Image } from "expo-image";
+import { useOtherUserStore } from "./store/user_store";
 
 const BASE_URL = `${API_BASE_URL}/Orders`;
 
@@ -42,6 +46,54 @@ export const getOrders = async (): Promise<any> => {
     } else {
       console.error("❌ Axios error:", error.message);
     }
+    throw error;
+  }
+};
+
+export const getCustomerOrderHistory = async (): Promise<
+  OrderResponseDTO[]
+> => {
+  try {
+    const token = useAuthStore.getState().token;
+    const response = await axios.get<OrderResponseDTO[]>(
+      `${BASE_URL}/history/customer`,
+      {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    console.log(`ORDER HISTORY RESPONSE: ${JSON.stringify(response.data)}`);
+    return response.data;
+  } catch (error: any) {
+    console.error(
+      "❌ [getCustomerOrderHistory] Error:",
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+};
+
+export const getCourierOrderHistory = async (): Promise<OrderResponseDTO[]> => {
+  try {
+    const token = useAuthStore.getState().token;
+    const response = await axios.get<OrderResponseDTO[]>(
+      `${BASE_URL}/history/courier`,
+      {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error: any) {
+    console.error(
+      "❌ [getCourierOrderHistory] Error:",
+      error.response?.data || error.message
+    );
     throw error;
   }
 };
@@ -119,6 +171,7 @@ export const postOrder = async (
   orderRequestDTO: PostOrderRequestDTO
 ): Promise<any> => {
   const token = useAuthStore.getState().token;
+  const { invokeHub } = useOrdersHubStore.getState();
 
   try {
     const payload: PostOrderRequestDTO = {
@@ -150,7 +203,13 @@ export const postOrder = async (
       },
     });
 
-    if (response) setTempOrderRequest(payload);
+    if (response) {
+      console.log(
+        `[HUB][CUSTOMER] JoinOrderGroup for new orderId=${response.data.orderIdPK}`
+      );
+      await invokeHub("JoinOrderGroup", response.data.orderIdPK);
+      setTempOrderRequest(payload);
+    }
     return response.data;
   } catch (err: any) {
     const apiError = err.response?.data;
@@ -176,6 +235,7 @@ export const acceptOrderById = async (
   request: AcceptOrderRequestDTO
 ): Promise<OrderResponseDTO> => {
   try {
+    const { invokeHub } = useOrdersHubStore.getState();
     const token = useAuthStore.getState().token;
     const response = await axios.post<OrderResponseDTO>(
       `${BASE_URL}/accept/${orderId}`,
@@ -201,6 +261,10 @@ export const acceptOrderById = async (
     });
     useActiveOrderStore.setState({ activeOrder: { ...response.data } });
 
+    console.log(
+      `[HUB][COURIER] JoinOrderGroup after accept orderId=${orderId}`
+    );
+    await invokeHub("JoinOrderGroup", orderId);
     console.log(`
       COURIER SIDE ACTIVE ORDER: ${JSON.stringify(
         useActiveOrderStore.getState().activeOrder
@@ -222,40 +286,30 @@ export const acceptOrderById = async (
     throw err;
   }
 };
-
 export const fetchOrderRealtime = async (
   onCreated: (order: OrderResponseDTO) => void
 ): Promise<void> => {
-  const { connection, initConnection } = useOrdersHubStore.getState();
+  const { initConnection, addHandler } = useOrdersHubStore.getState();
+  const conn = await initConnection();
 
-  // Ensure connection is active
-  let activeConnection = connection;
-  if (
-    !activeConnection ||
-    activeConnection.state !== SignalR.HubConnectionState.Connected
-  ) {
-    await initConnection();
-    activeConnection = useOrdersHubStore.getState().connection;
-  }
+  console.log("[HUB][COURIER] Connected OrdersHub for realtime OrderCreated");
 
-  if (!activeConnection) {
-    console.error("❌ OrdersHub connection not available.");
-    return;
-  }
-
-  activeConnection.off("OrderCreated");
-
-  // Listen for real-time order creation
-  activeConnection.on("OrderCreated", (newOrder: OrderResponseDTO) => {
-    onCreated(newOrder);
+  addHandler("OrderCreated", (order: OrderResponseDTO) => {
+    console.log(
+      `[HUB][COURIER] OrderCreated received for orderId=${order.orderIdPK}`
+    );
+    onCreated(order);
   });
 };
-export const stopOrderRealtime = async () => {
-  const { disconnect } = useChatsHubStore.getState();
 
-  if (connection) {
+export const stopOrderRealtime = async () => {
+  const { disconnect } = useOrdersHubStore.getState();
+
+  try {
     await disconnect();
-    console.log("🛑 SignalR connection stopped");
+    console.log("OrdersHub SignalR connection stopped");
+  } catch (err) {
+    console.error("Failed to stop OrdersHub connection:", err);
   }
 };
 
@@ -307,65 +361,67 @@ export const getCurrentOrderAsCustomer =
   };
 
 export const receiveOrderRealtime = async (): Promise<void> => {
-  const { connection, initConnection } = useOrdersHubStore.getState();
+  const { initConnection, addHandler } = useOrdersHubStore.getState();
 
-  let activeConnection = connection;
-  if (
-    !activeConnection ||
-    activeConnection.state !== SignalR.HubConnectionState.Connected
-  ) {
-    await initConnection();
-    activeConnection = useOrdersHubStore.getState().connection;
-  }
+  const conn = await initConnection();
 
-  if (!activeConnection) {
-    console.error(" OrdersHub connection not available for receiving orders.");
-    return;
-  }
-
-  // Clean up existing listeners before re-binding
-  activeConnection.off("OrderAccepted");
-  activeConnection.off("OrderUpdated");
-
-  // When a courier accepts an order (notify customer)
-  activeConnection.on(
-    "OrderAccepted",
-    async (updatedOrder: OrderResponseDTO) => {
-      console.log("📬 Order accepted:", updatedOrder);
-
-      useActiveOrderStore.setState({ activeOrder: updatedOrder });
-      const { activeOrder } = useActiveOrderStore.getState();
-
-      console.log(`CUSTOMER ACTIVE ORDER SIDE: ${JSON.stringify(activeOrder)}`);
-      if (updatedOrder.courierId) {
-        try {
-          console.log(`RECEIVED COURIER ID: ${updatedOrder.courierId}`);
-          const courier = await getUserById(updatedOrder.courierId);
-          console.log("Courier info:", courier);
-        } catch (err) {
-          console.error("Failed to fetch courier info:", err);
-        }
-      }
-    }
+  console.log(
+    "[HUB][CUSTOMER] Connected OrdersHub for realtime accepts/updates"
   );
 
-  activeConnection.on(
-    "OrderStatusUpdated",
-    async (updatedOrder: OrderResponseDTO) => {
-      const { setIsCancelled } = useActiveOrderStore.getState();
-      console.log("♻️ Order updated:", updatedOrder);
+  addHandler("OrderAccepted", async (updatedOrder: OrderResponseDTO) => {
+    console.log("📬 OrderAccepted:", updatedOrder);
+    const { setShowOrderAccepted } = useActiveOrderStore.getState();
 
+    useActiveOrderStore.setState({ activeOrder: updatedOrder });
+
+    // Show OrderAccepted modal for 2 seconds
+    setShowOrderAccepted(true);
+    setTimeout(() => setShowOrderAccepted(false), 2000);
+
+    useMessageRoomState.setState({
+      messageRoomParticipants: {
+        roomId: updatedOrder.chatRoomResponseDTO?.roomIdPK ?? null,
+        senderId: updatedOrder.courierId ?? null,
+        receiverId: updatedOrder.customerId ?? null,
+      },
+    });
+  });
+
+  addHandler("OrderStatusUpdated", (updatedOrder: OrderResponseDTO) => {
+    console.log("♻️ OrderStatusUpdated:", updatedOrder);
+    const { setIsCancelled, setIsDelivered } = useActiveOrderStore.getState();
+
+    if (updatedOrder.status === Status.CANCELLED) {
       setIsCancelled(true);
-
     }
-  );
+    if (updatedOrder.status === Status.DELIVERED) {
+      setIsDelivered(true);
+    }
 
-  console.log("✅ Listening for OrderAccepted and OrderUpdated events...");
+    if (
+      updatedOrder.status === Status.CANCELLED ||
+      updatedOrder.status === Status.DELIVERED
+    ) {
+      clearActiveOrder();
+      AsyncStorage.removeItem("message-cache-storage");
+
+      // Clear otherUser cache
+      useOtherUserStore.getState().clearOtherUser();
+
+      // Clear expo-image cache
+      Image.clearDiskCache();
+      Image.clearMemoryCache();
+      console.log("🗑️ Cleared message & image cache");
+    }
+    useActiveOrderStore.setState({ activeOrder: updatedOrder });
+  });
 };
 
 export const updateOrderById = async (orderId: number, orderStatus: Status) => {
   try {
     const token = useAuthStore.getState().token;
+    const { invokeHub } = useOrdersHubStore.getState();
 
     const response = await axios.patch(
       `${BASE_URL}/update/${orderId}/${orderStatus}`,
@@ -378,12 +434,22 @@ export const updateOrderById = async (orderId: number, orderStatus: Status) => {
       }
     );
 
-    if (response) {
+    if (orderStatus === Status.CANCELLED || orderStatus === Status.DELIVERED) {
       clearActiveOrder();
-      return response.data;
+      useRouteStore.getState().clearRoute(orderId);
+
+      await invokeHub("LeaveOrderGroup", orderId.toString());
     }
-  } catch (err) {
-    console.error(err);
+
+    return response.data;
+  } catch (err: any) {
+    console.error("❌ [updateOrderById] Error:", {
+      orderId,
+      orderStatus,
+      status: err?.response?.status,
+      message: err?.response?.data?.message || err.message,
+      data: err?.response?.data,
+    });
     throw err;
   }
 };
