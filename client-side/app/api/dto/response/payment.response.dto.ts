@@ -4,6 +4,7 @@ export enum PaymentMethods {
 export enum PaymentStatuses {
   PENDING = "PENDING",
   COMPLETED = "COMPLETED",
+  CANCELLED = "CANCELLED",
 }
 
 export interface PaymentsResponseDTO {
@@ -18,8 +19,9 @@ export interface PaymentsResponseDTO {
   proposedItemsFee?: number;
   totalAmount?: number;
   isItemsFeeConfirmed: boolean;
-  paymentMethod: PaymentMethod;
-  paymentStatus: PaymentStatus;
+  paymentMethod: PaymentMethods;
+  paymentStatus: PaymentStatuses;
   paidAt: string;
   createdAt: string;
+  imageKey?: string; // S3 key for receipt image
 }

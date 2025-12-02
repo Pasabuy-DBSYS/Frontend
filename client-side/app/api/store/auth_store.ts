@@ -4,10 +4,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { jwtDecode } from "jwt-decode";
 import { UserResponseDTO } from "../dto/response/auth.response.dto";
 import { getCurrentProfile } from "../user";
-import { sortRoutes } from "expo-router/build/sortRoutes";
 import { Coordinates } from "@/types/interfaces";
 
-interface DecodedToken {}
+interface DecodedToken {
+  exp?: number;
+  iat?: number;
+  sub?: string;
+  [key: string]: any;
+}
 
 interface AuthState {
   token: string | null;

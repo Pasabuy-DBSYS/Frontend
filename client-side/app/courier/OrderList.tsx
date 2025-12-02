@@ -1,4 +1,4 @@
-import React, { useActionState, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -12,15 +12,17 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Button } from "@/components/Button";
 import ExpandOrder from "@/components/svg/ExpandOrder";
 import MinimizeOrderIcon from "@/components/svg/MinimizeOrderIcon";
-import { order_list } from "@/constants/order_list";
 import NoOrderPoster from "@/components/svg/NoOrderPoster";
 import { useNavigation } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { CourierTrackingViewNavProp } from "@/types/types";
 import PickIcon from "@/components/svg/PickIcon";
 import LocationBlueIcon from "@/components/svg/LocationBlueIcon";
 import ConfirmPickupModal from "@/components/modals/ConfirmDeliver";
-import { OrderResponseDTO } from "../api/dto/response/auth.response.dto";
-import axios from "axios";
+import {
+  OrderResponseDTO,
+  Status,
+} from "../api/dto/response/order.response.dto";
 import {
   acceptOrderById,
   fetchOrderRealtime,
@@ -28,11 +30,9 @@ import {
   getOrderByStatus,
   stopOrderRealtime,
 } from "../api/orders";
-import { Status } from "../api/dto/response/order.response.dto";
 import { useAuthStore } from "../api/store/auth_store";
 import * as Location from "expo-location";
 import { AcceptOrderRequestDTO } from "../api/dto/request/order.request.dto";
-import * as SignalR from "@microsoft/signalr";
 import { Coordinates } from "@/types/interfaces";
 import { useActiveOrderStore } from "../api/store/order_store";
 
@@ -47,10 +47,12 @@ const OrderList = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const navigator = useNavigation<CourierTrackingViewNavProp>();
   const [showConfirm, setShowConfirm] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const { activeOrder, clearActiveOrder } = useActiveOrderStore();
   const [orders, setOrders] = useState<OrderResponseDTO[] | null>(null);
   const [location, setLocation] = useState<Coordinates | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isAccepting, setIsAccepting] = useState(false);
 
   const { user } = useAuthStore();
 
@@ -85,19 +87,6 @@ const OrderList = () => {
     }
   };
 
-  const fetchPendingOrders = async (): Promise<OrderResponseDTO[]> => {
-    try {
-      const response = await getOrderByStatus(Status.PENDING);
-
-      setOrders(response);
-
-      return response;
-    } catch (err: any) {
-      console.error(err.response.data);
-      throw err;
-    }
-  };
-
   const acceptOrder = async (orderId: number) => {
     try {
       const coords = await getLocation(); // use the returned value
@@ -116,20 +105,102 @@ const OrderList = () => {
     }
   };
 
-  useEffect(() => {
-    console.log(`ACTIVE ORDER: ${JSON.stringify(activeOrder)}`);
-    if (!activeOrder) {
-      fetchPendingOrders();
+  // Fetch pending orders when screen is focused (and no active order)
+  useFocusEffect(
+    useCallback(() => {
+      // Always rehydrate activeOrder from backend on focus
+      (async () => {
+        try {
+          await useActiveOrderStore.getState().rehydrateActiveOrder();
+        } catch (err) {
+          console.error("[OrderList] Failed to rehydrate activeOrder:", err);
+        }
+      })();
+
+      console.log(
+        `[OrderList] Screen focused, activeOrder: ${
+          useActiveOrderStore.getState().activeOrder?.orderIdPK ?? "none"
+        }`
+      );
+
+      const activeOrder = useActiveOrderStore.getState().activeOrder;
+      if (activeOrder) {
+        // Don't fetch if courier has an active order
+        console.log("[OrderList] Courier has active order, skipping fetch");
+        return;
+      }
+
+      // Fetch pending orders
+      const loadOrders = async () => {
+        try {
+          console.log("[OrderList] Fetching pending orders...");
+          const pendingOrders = await getOrderByStatus(Status.PENDING);
+          console.log(
+            `[OrderList] Fetched ${pendingOrders?.length ?? 0} pending orders`
+          );
+          setOrders(pendingOrders);
+        } catch (err: any) {
+          console.error(
+            "[OrderList] Failed to fetch pending orders:",
+            err.message
+          );
+          setOrders([]);
+        }
+      };
+
+      loadOrders();
+
+      // Setup realtime listener for new orders
       fetchOrderRealtime((newOrder) => {
+        console.log(
+          `[OrderList] Realtime order update: ${newOrder.orderIdPK}, status: ${newOrder.status}`
+        );
         if (newOrder.status === Status.PENDING) {
-          setOrders((prev) => (prev ? [newOrder, ...prev] : [newOrder]));
+          // Add new pending order (avoid duplicates)
+          setOrders((prev) => {
+            if (!prev) return [newOrder];
+            const exists = prev.some((o) => o.orderIdPK === newOrder.orderIdPK);
+            return exists ? prev : [newOrder, ...prev];
+          });
+        } else {
+          // Remove order from list if it's no longer pending
+          setOrders((prev) =>
+            prev ? prev.filter((o) => o.orderIdPK !== newOrder.orderIdPK) : null
+          );
         }
       });
-    }
-  }, []);
 
-  const onConfirmPickup = () => {
+      return () => {
+        console.log("[OrderList] Screen unfocused, stopping realtime");
+        stopOrderRealtime();
+      };
+    }, [])
+  );
+
+  const onConfirmPickup = (orderId: number) => {
+    setSelectedOrderId(orderId);
     setShowConfirm(true);
+  };
+
+  const handleConfirmPickup = async () => {
+    if (!selectedOrderId || isAccepting) return;
+
+    setIsAccepting(true);
+    try {
+      await acceptOrder(selectedOrderId);
+      // Remove from list immediately
+      setOrders((prev) =>
+        prev ? prev.filter((o) => o.orderIdPK !== selectedOrderId) : null
+      );
+      setShowConfirm(false);
+      routeCourierTrackingView(selectedOrderId);
+    } catch (err) {
+      console.error("Failed to accept order:", err);
+      setShowConfirm(false);
+    } finally {
+      setIsAccepting(false);
+      setSelectedOrderId(null);
+    }
   };
 
   const toggleExpand = (orderId: number, order: OrderResponseDTO) => {
@@ -151,6 +222,20 @@ const OrderList = () => {
         paddingTop: "20%",
       }}
     >
+      {/* Single modal outside FlatList */}
+      <ConfirmPickupModal
+        visible={showConfirm}
+        onCancel={() => {
+          setShowConfirm(false);
+          setSelectedOrderId(null);
+        }}
+        onConfirm={handleConfirmPickup}
+        title="Confirm Pickup"
+        message="Are you sure you want to pick up this order?"
+        confirmText={isAccepting ? "Accepting..." : "Yes, pick up"}
+        cancelText="No"
+      />
+
       <View style={{ flex: 1 }}>
         <Text style={{ color: "#333", fontWeight: "700", fontSize: 36 }}>
           Orders
@@ -201,18 +286,6 @@ const OrderList = () => {
                   onPress={() => toggleExpand(item.orderIdPK, item)}
                   activeOpacity={1} // keeps it fully opaque on press
                 >
-                  <ConfirmPickupModal
-                    visible={showConfirm}
-                    onCancel={() => setShowConfirm(false)}
-                    onConfirm={() => {
-                      acceptOrder(item.orderIdPK);
-                      routeCourierTrackingView(item.orderIdPK);
-                    }}
-                    title="Confirm Pickup"
-                    message="Are you sure you want to pick up this order?"
-                    confirmText="Yes, pick up"
-                    cancelText="No"
-                  />
                   {/* Header */}
                   <View
                     style={{
@@ -381,7 +454,7 @@ const OrderList = () => {
                             }}
                           >
                             <Text style={{ fontWeight: "600" }}>
-                              {item.paymentsResponseDTO?.itemsFee}
+                              {item.paymentsResponseDTO?.deliveryFee}
                             </Text>
                           </View>
                         </View>
@@ -390,7 +463,7 @@ const OrderList = () => {
                       <View style={{ alignItems: "center", marginTop: 10 }}>
                         <Button
                           onPress={() => {
-                            onConfirmPickup();
+                            onConfirmPickup(item.orderIdPK);
                           }}
                           textColor="white"
                           fontWeight="bold"

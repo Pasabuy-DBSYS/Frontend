@@ -37,7 +37,7 @@ export default function MessageBubble({
         />
       )}
 
-      {messageType === MessageTypes.IMAGE ? (
+      {messageType === 1 ? (
         <View
           style={{
             maxWidth: "75%",

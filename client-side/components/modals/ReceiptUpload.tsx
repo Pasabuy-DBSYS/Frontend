@@ -10,6 +10,7 @@ import {
   TouchableWithoutFeedback,
   Image,
   TextInput,
+  Keyboard,
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { Feather } from "@expo/vector-icons";
@@ -36,7 +37,8 @@ const ReceiptUploadModal: React.FC<ReceiptUploadProps> = ({
     name: string;
     type: string;
   } | null>(null);
-  const [amount, setAmount] = useState(offeredAmount.toString());
+  const [amount, setAmount] = useState("");
+  const inputRef = useRef<TextInput>(null);
 
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.9)).current;
@@ -86,12 +88,40 @@ const ReceiptUploadModal: React.FC<ReceiptUploadProps> = ({
     }
   }, [visible]);
 
-  // Reset image when modal closes
+  // Reset image and amount when modal closes
   useEffect(() => {
     if (!visible) {
       setSelectedImage(null);
+      setAmount("");
     }
   }, [visible]);
+
+  // Handle amount input - override 0 behavior
+  const handleAmountChange = (text: string) => {
+    // Remove non-numeric characters except decimal
+    const cleaned = text.replace(/[^0-9.]/g, "");
+
+    // If current amount is "0" and user types a number, replace the 0
+    if (
+      amount === "0" &&
+      cleaned.length > 1 &&
+      cleaned.startsWith("0") &&
+      cleaned[1] !== "."
+    ) {
+      setAmount(cleaned.slice(1));
+    } else {
+      setAmount(cleaned);
+    }
+  };
+
+  // Dismiss keyboard on tap outside input
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
+
+  // Check if can submit (has image and amount > 0)
+  const parsedAmount = parseFloat(amount) || 0;
+  const canSubmit = selectedImage !== null && parsedAmount > 0;
 
   const handleUploadPhoto = async () => {
     // Request camera permission
@@ -120,9 +150,11 @@ const ReceiptUploadModal: React.FC<ReceiptUploadProps> = ({
   };
 
   const handleConfirm = () => {
-    if (selectedImage) {
-      onConfirm(selectedImage, parseInt(amount) || 0);
+    if (selectedImage && parsedAmount > 0) {
+      Keyboard.dismiss();
+      onConfirm(selectedImage, parsedAmount);
       setSelectedImage(null);
+      setAmount("");
     }
   };
 
@@ -153,180 +185,211 @@ const ReceiptUploadModal: React.FC<ReceiptUploadProps> = ({
           }}
         />
 
-        {/* Dismiss on backdrop tap */}
-        <TouchableWithoutFeedback onPress={onCancel}>
+        {/* Dismiss keyboard and modal on backdrop tap */}
+        <TouchableWithoutFeedback
+          onPress={() => {
+            Keyboard.dismiss();
+            onCancel();
+          }}
+        >
           <View
             style={{ position: "absolute", width: "100%", height: "100%" }}
           />
         </TouchableWithoutFeedback>
 
-        {/* Animated Card */}
-        <Animated.View
-          style={{
-            width: "85%",
-            backgroundColor: "#fff",
-            borderRadius: 16,
-            padding: 24,
-            shadowColor: "#000",
-            shadowOpacity: 0.15,
-            shadowRadius: 12,
-            shadowOffset: { width: 0, height: 8 },
-            elevation: 8,
-            opacity,
-            transform: [{ scale }],
-            alignItems: "center",
-          }}
-        >
-          {/* Close Button */}
-          <TouchableOpacity
-            onPress={onCancel}
+        {/* Animated Card - tap to dismiss keyboard only */}
+        <TouchableWithoutFeedback onPress={dismissKeyboard}>
+          <Animated.View
             style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              padding: 4,
+              width: "85%",
+              backgroundColor: "#fff",
+              borderRadius: 16,
+              padding: 24,
+              shadowColor: "#000",
+              shadowOpacity: 0.15,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 8 },
+              elevation: 8,
+              opacity,
+              transform: [{ scale }],
+              alignItems: "center",
             }}
           >
-            <Feather name="x" size={24} color="#999" />
-          </TouchableOpacity>
-
-          {/* Title */}
-          <Text
-            style={{
-              fontSize: 18,
-              fontWeight: "700",
-              color: "#111",
-              textAlign: "center",
-              marginTop: 10,
-            }}
-          >
-            Receipt of the{"\n"}products
-          </Text>
-
-          {/* Upload Photo Button or Preview */}
-          {selectedImage ? (
+            {/* Close Button */}
             <TouchableOpacity
-              onPress={handleUploadPhoto}
-              style={{ marginTop: 20 }}
+              onPress={() => {
+                Keyboard.dismiss();
+                onCancel();
+              }}
+              style={{
+                position: "absolute",
+                top: 12,
+                right: 12,
+                padding: 4,
+              }}
             >
-              <Image
-                source={{ uri: selectedImage.uri }}
+              <Feather name="x" size={24} color="#999" />
+            </TouchableOpacity>
+
+            {/* Title */}
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "700",
+                color: "#111",
+                textAlign: "center",
+                marginTop: 10,
+              }}
+            >
+              Receipt of the{"\n"}products
+            </Text>
+
+            {/* Upload Photo Button or Preview */}
+            {selectedImage ? (
+              <TouchableOpacity
+                onPress={handleUploadPhoto}
+                style={{ marginTop: 20 }}
+              >
+                <Image
+                  source={{ uri: selectedImage.uri }}
+                  style={{
+                    width: 150,
+                    height: 150,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: "#545EE1",
+                  }}
+                />
+                <Text
+                  style={{
+                    textAlign: "center",
+                    marginTop: 8,
+                    color: "#545EE1",
+                    fontSize: 12,
+                  }}
+                >
+                  Tap to change
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={handleUploadPhoto}
                 style={{
-                  width: 150,
-                  height: 150,
-                  borderRadius: 12,
-                  borderWidth: 2,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingVertical: 10,
+                  paddingHorizontal: 20,
+                  borderWidth: 1.5,
                   borderColor: "#545EE1",
-                }}
-              />
-              <Text
-                style={{
-                  textAlign: "center",
-                  marginTop: 8,
-                  color: "#545EE1",
-                  fontSize: 12,
+                  borderRadius: 20,
+                  marginTop: 20,
                 }}
               >
-                Tap to change
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={handleUploadPhoto}
+                <Feather name="camera" size={18} color="#545EE1" />
+                <Text
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 14,
+                    color: "#545EE1",
+                    fontWeight: "500",
+                  }}
+                >
+                  Upload Photo
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Amount Input */}
+            <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                paddingVertical: 10,
-                paddingHorizontal: 20,
-                borderWidth: 1.5,
-                borderColor: "#545EE1",
-                borderRadius: 20,
-                marginTop: 20,
+                marginTop: 24,
               }}
             >
-              <Feather name="camera" size={18} color="#545EE1" />
               <Text
                 style={{
-                  marginLeft: 8,
-                  fontSize: 14,
+                  fontSize: 28,
+                  fontWeight: "700",
                   color: "#545EE1",
-                  fontWeight: "500",
                 }}
               >
-                Upload Photo
+                ₱
+              </Text>
+              <TextInput
+                ref={inputRef}
+                value={amount}
+                onChangeText={handleAmountChange}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor="#B9BCEF"
+                selectTextOnFocus={true}
+                onFocus={() => {
+                  // Clear if the value is 0 when focusing
+                  if (amount === "0") {
+                    setAmount("");
+                  }
+                }}
+                style={{
+                  fontSize: 28,
+                  fontWeight: "700",
+                  color: "#545EE1",
+                  marginLeft: 4,
+                  minWidth: 80,
+                  textAlign: "center",
+                  borderBottomWidth: 2,
+                  borderBottomColor: "#545EE1",
+                  paddingVertical: 4,
+                }}
+              />
+            </View>
+            <Text
+              style={{
+                fontSize: 12,
+                color: "#888",
+                marginTop: 8,
+              }}
+            >
+              Total items amount
+            </Text>
+            {parsedAmount === 0 && amount !== "" && (
+              <Text
+                style={{
+                  fontSize: 11,
+                  color: "#F44336",
+                  marginTop: 4,
+                }}
+              >
+                Amount must be greater than 0
+              </Text>
+            )}
+
+            {/* Confirm Button */}
+            <TouchableOpacity
+              onPress={handleConfirm}
+              disabled={!canSubmit}
+              style={{
+                marginTop: 16,
+                backgroundColor: canSubmit ? "#545EE1" : "#B9BCEF",
+                paddingVertical: 14,
+                paddingHorizontal: 60,
+                borderRadius: 25,
+                width: "100%",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 16,
+                  fontWeight: "600",
+                }}
+              >
+                Confirm
               </Text>
             </TouchableOpacity>
-          )}
-
-          {/* Amount Input */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              marginTop: 24,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 28,
-                fontWeight: "700",
-                color: "#545EE1",
-              }}
-            >
-              ₱
-            </Text>
-            <TextInput
-              value={amount}
-              onChangeText={(text) => setAmount(text.replace(/[^0-9.]/g, ""))}
-              keyboardType="numeric"
-              style={{
-                fontSize: 28,
-                fontWeight: "700",
-                color: "#545EE1",
-                marginLeft: 4,
-                minWidth: 80,
-                textAlign: "center",
-                borderBottomWidth: 2,
-                borderBottomColor: "#545EE1",
-                paddingVertical: 4,
-              }}
-            />
-          </View>
-          <Text
-            style={{
-              fontSize: 12,
-              color: "#888",
-              marginTop: 8,
-            }}
-          >
-            Total items amount
-          </Text>
-
-          {/* Confirm Button */}
-          <TouchableOpacity
-            onPress={handleConfirm}
-            disabled={!selectedImage}
-            style={{
-              marginTop: 24,
-              backgroundColor: selectedImage ? "#545EE1" : "#B9BCEF",
-              paddingVertical: 14,
-              paddingHorizontal: 60,
-              borderRadius: 25,
-              width: "100%",
-              alignItems: "center",
-            }}
-          >
-            <Text
-              style={{
-                color: "#fff",
-                fontSize: 16,
-                fontWeight: "600",
-              }}
-            >
-              Confirm
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
+          </Animated.View>
+        </TouchableWithoutFeedback>
       </View>
     </Modal>
   );

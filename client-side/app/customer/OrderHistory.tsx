@@ -40,81 +40,6 @@ if (
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Convert Status enum to display string
-const getStatusLabel = (status: Status): string => {
-  switch (status) {
-    case Status.PENDING:
-      return "Pending";
-    case Status.ACCEPTED:
-      return "Accepted";
-    case Status.IN_TRANSIT:
-      return "In Transit";
-    case Status.DELIVERED:
-      return "Delivered";
-    case Status.WATING_FOR_REVIEW:
-      return "Waiting for Review";
-    case Status.REVIEWED:
-      return "Reviewed";
-    case Status.CANCELLED:
-      return "Cancelled";
-    default:
-      return "Unknown";
-  }
-};
-
-const getStatusColor = (status: Status): string => {
-  switch (status) {
-    case Status.DELIVERED:
-    case Status.REVIEWED:
-      return "#96FFB2";
-    case Status.IN_TRANSIT:
-    case Status.ACCEPTED:
-      return "#97C8FF";
-    case Status.CANCELLED:
-      return "#FC5862";
-    case Status.PENDING:
-      return "#FFE082";
-    default:
-      return "#E0E0E0";
-  }
-};
-
-const getTextColor = (status: Status): string => {
-  return status === Status.CANCELLED ? "#FFFFFF" : "#000000";
-};
-
-const getText = (status: Status): string => {
-  switch (status) {
-    case Status.DELIVERED:
-    case Status.REVIEWED:
-    case Status.WATING_FOR_REVIEW:
-      return "Successful Transaction";
-    case Status.IN_TRANSIT:
-    case Status.PENDING:
-    case Status.ACCEPTED:
-      return "Upcoming Order";
-    case Status.CANCELLED:
-      return "Unsuccessful Transaction";
-    default:
-      return "Error";
-  }
-};
-
-const getStatusTextColor = (status: Status): string => {
-  switch (status) {
-    case Status.DELIVERED:
-    case Status.REVIEWED:
-      return "#4CAF50";
-    case Status.IN_TRANSIT:
-    case Status.ACCEPTED:
-      return "#97C8FF";
-    case Status.CANCELLED:
-      return "#FC5862";
-    default:
-      return "#E0E0E0";
-  }
-};
-
 // Format date for display (Philippine timezone)
 const formatOrderTime = (dateString: string | null | undefined): string => {
   console.log(`DATE STRING: ${dateString}`);
@@ -183,12 +108,64 @@ const getProgressStep = (status: Status): number => {
   }
 };
 
+const statusColorAndText: Record<number, { color: string; text: string }> = {
+  [Status.PENDING]: { color: "#FFCDD2", text: "Pending" },
+  [Status.ACCEPTED]: { color: "#C8E6C9", text: "Accepted" },
+  [Status.PICKED_UP]: { color: "#B2EBF2", text: "Picked Up" },
+  [Status.IN_TRANSIT]: { color: "#B2EBF2", text: "In Transit" },
+  [Status.DELIVERED]: { color: "#DCE775", text: "Delivered" },
+  [Status.WATING_FOR_REVIEW]: { color: "#DCE775", text: "Waiting for Review" },
+  [Status.REVIEWED]: { color: "#DCE775", text: "Reviewed" },
+  [Status.CANCELLED]: { color: "#FC5862", text: "Cancelled" },
+};
+
+const getTextColor = (status: Status): string => {
+  return status === Status.CANCELLED ? "#FFFFFF" : "#000000";
+};
+
+const getText = (status: Status): string => {
+  switch (status) {
+    case Status.DELIVERED:
+    case Status.REVIEWED:
+      return "Successful Transaction";
+    case Status.WATING_FOR_REVIEW:
+      return "Waiting for Review";
+    case Status.IN_TRANSIT:
+    case Status.PENDING:
+    case Status.ACCEPTED:
+    case Status.PICKED_UP:
+      return "Upcoming Order";
+    case Status.CANCELLED:
+      return "Unsuccessful Transaction";
+    default:
+      return "Error";
+  }
+};
+
+const getStatusTextColor = (status: Status): string => {
+  switch (status) {
+    case Status.DELIVERED:
+    case Status.REVIEWED:
+    case Status.WATING_FOR_REVIEW:
+      return "#4CAF50";
+    case Status.IN_TRANSIT:
+    case Status.ACCEPTED:
+    case Status.PICKED_UP:
+      return "#97C8FF";
+    case Status.CANCELLED:
+      return "#FC5862";
+    default:
+      return "#E0E0E0";
+  }
+};
+
 const OrderHistory = () => {
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [orders, setOrders] = useState<OrderResponseDTO[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const { activeOrder } = useActiveOrderStore();
+  const { activeOrder, setActiveOrder, setPendingReview } =
+    useActiveOrderStore();
   const { user } = useAuthStore();
   const { otherUser } = useOtherUserStore();
   const navigator = useNavigation<CourierTrackingViewNavProp>();
@@ -203,6 +180,8 @@ const OrderHistory = () => {
         const data = isCourier
           ? await getCourierOrderHistory()
           : await getCustomerOrderHistory();
+
+          
         setOrders(data);
       } catch (error) {
         console.error("Failed to fetch orders:", error);
@@ -219,12 +198,9 @@ const OrderHistory = () => {
   };
 
   // Check if active order should be shown
-  const showActiveOrder =
-    activeOrder &&
-    activeOrder.status !== Status.CANCELLED &&
-    activeOrder.status !== Status.DELIVERED &&
-    activeOrder.status !== Status.REVIEWED;
+  const showActiveOrder = activeOrder;
 
+  console.log(`ACTIVE ORDER: ${JSON.stringify(activeOrder)}`);
   const progressStep = activeOrder ? getProgressStep(activeOrder.status) : 0;
 
   // Get the other user's name
@@ -392,7 +368,9 @@ const OrderHistory = () => {
                 <View style={{ alignItems: "flex-end" }}>
                   <Text
                     style={{
-                      backgroundColor: getStatusColor(activeOrder.status),
+                      backgroundColor:
+                        statusColorAndText[activeOrder.status]?.color ||
+                        "#E0E0E0",
                       color: getTextColor(activeOrder.status),
                       borderRadius: 6,
                       paddingHorizontal: 8,
@@ -401,7 +379,7 @@ const OrderHistory = () => {
                       fontSize: 11,
                     }}
                   >
-                    {getStatusLabel(activeOrder.status)}
+                    {statusColorAndText[activeOrder.status]?.text || "Unknown"}
                   </Text>
                 </View>
               </View>
@@ -578,6 +556,8 @@ const OrderHistory = () => {
                           backgroundColor:
                             item.status === Status.CANCELLED
                               ? "#FC5862"
+                              : item.status === Status.WATING_FOR_REVIEW
+                              ? "#FFD700"
                               : "#4CAF50",
                           justifyContent: "center",
                           alignItems: "center",
@@ -589,6 +569,8 @@ const OrderHistory = () => {
                           name={
                             item.status === Status.CANCELLED
                               ? "close"
+                              : item.status === Status.WATING_FOR_REVIEW
+                              ? "star"
                               : "checkmark"
                           }
                           size={14}
@@ -615,13 +597,8 @@ const OrderHistory = () => {
                       <Text
                         style={{
                           backgroundColor:
-                            item.status === Status.CANCELLED
-                              ? "#FC5862"
-                              : "#96FFB2",
-                          color:
-                            item.status === Status.CANCELLED
-                              ? "#FFFFFF"
-                              : "#000000",
+                            statusColorAndText[item.status]?.color || "#E0E0E0",
+                          color: getTextColor(item.status),
                           borderRadius: 4,
                           paddingHorizontal: 10,
                           paddingVertical: 4,
@@ -629,9 +606,7 @@ const OrderHistory = () => {
                           fontSize: 12,
                         }}
                       >
-                        {item.status === Status.CANCELLED
-                          ? "Delivery Failed"
-                          : "Delivered"}
+                        {statusColorAndText[item.status]?.text || "Unknown"}
                       </Text>
                       <Text
                         style={{ fontSize: 12, color: "#888", marginTop: 6 }}
@@ -770,6 +745,44 @@ const OrderHistory = () => {
                           {getText(item.status)}
                         </Text>
                       </View>
+
+                      {/* Review Button for Waiting for Review */}
+                      {item.status === Status.WATING_FOR_REVIEW && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            setPendingReview(true);
+                            navigator.reset({
+                              index: 0,
+                              routes: [
+                                {
+                                  name: "ReviewOrder",
+                                  params: {
+                                    orderId: item.orderIdPK,
+                                    courierId: item.courierId,
+                                  },
+                                },
+                              ],
+                            });
+                          }}
+                          style={{
+                            backgroundColor: "#545EE1",
+                            borderRadius: 20,
+                            paddingVertical: 12,
+                            alignItems: "center",
+                            marginTop: 10,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: "#fff",
+                              fontWeight: "600",
+                              fontSize: 14,
+                            }}
+                          >
+                            Review Order
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   )}
                 </TouchableOpacity>

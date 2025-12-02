@@ -174,6 +174,20 @@ export const changeRole = async (): Promise<ChangeRoleResponse> => {
 
     console.log("Role changed on server:", response.data);
 
+    // Extract token - handle both string and object response formats
+    const newToken =
+      typeof response.data === "string"
+        ? response.data
+        : response.data?.token ?? response.data;
+
+    console.log("[SWITCH] New token received:", newToken ? "✅" : "❌");
+
+    // Update auth store with new token FIRST
+    if (newToken && typeof newToken === "string") {
+      useAuthStore.setState({ token: newToken });
+      console.log("[SWITCH] Token updated in auth store");
+    }
+
     // Disconnect SignalR so it reconnects with the new token on navigation
     try {
       const { disconnect } = useOrdersHubStore.getState();
@@ -191,7 +205,7 @@ export const changeRole = async (): Promise<ChangeRoleResponse> => {
     console.log("Refreshed user profile:", updatedUser);
 
     return {
-      newToken: response.data,
+      newToken: newToken,
       user: updatedUser,
     };
   } catch (err: any) {
@@ -251,5 +265,207 @@ export const changeProfile = async (imageFile: RNFile) => {
   } catch (err) {
     console.log(err);
     throw err;
+  }
+};
+
+/** Change user name */
+export const changeName = async (
+  firstName: string,
+  middleName: string,
+  lastName: string
+): Promise<UserResponseDTO> => {
+  try {
+    const { token } = useAuthStore.getState();
+
+    const response = await axios.patch<UserResponseDTO>(
+      `${BASE_URL}/change/name`,
+      { firstName, middleName, lastName },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    console.log("✅ Name changed successfully:", response.data);
+
+    // Update user in store
+    const updatedUser = await getCurrentProfile();
+    useAuthStore.setState({ user: updatedUser });
+
+    return response.data;
+  } catch (err: any) {
+    console.error(
+      "❌ [changeName] Request Failed:",
+      err?.response?.data || err.message
+    );
+    throw new Error(err?.response?.data?.message || "Failed to change name");
+  }
+};
+
+/** Send email verification code */
+export const sendEmailVerificationCode = async (
+  newEmail: string
+): Promise<void> => {
+  try {
+    const { token } = useAuthStore.getState();
+
+    console.log(`NIGGA: ${encodeURIComponent(newEmail)}`);
+    await axios.get(
+      `${API_BASE_URL}/VerificationCode/email/${encodeURIComponent(newEmail)}`,
+      {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    console.log("✅ Verification code sent to:", newEmail);
+  } catch (err: any) {
+    console.error(
+      "❌ [sendEmailVerificationCode] Request Failed:",
+      err?.response?.data || err.message
+    );
+    throw new Error(
+      err?.response?.data?.message || "Failed to send verification code"
+    );
+  }
+};
+
+/** Verify email code */
+export const verifyEmailCode = async (
+  email: string,
+  verificationCode: string
+): Promise<boolean> => {
+  try {
+    const { token } = useAuthStore.getState();
+
+    const response = await axios.post(
+      `${API_BASE_URL}/VerificationCode/email/verify`,
+      { email, verificationCode },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    console.log(`VERIFY RESPONSE: ${JSON.stringify(response.data)}`);
+
+    console.log("✅ Email code verified successfully");
+    return response.data;
+  } catch (err: any) {
+    console.error(
+      "❌ [verifyEmailCode] Request Failed:",
+      err?.response?.data || err.message
+    );
+    throw new Error(
+      err?.response?.data?.message || "Invalid verification code"
+    );
+  }
+};
+
+/** Change user email */
+export const changeEmail = async (
+  newEmail: string,
+  code: string
+): Promise<UserResponseDTO> => {
+  try {
+    const { token } = useAuthStore.getState();
+
+    const response = await axios.patch<UserResponseDTO>(
+      `${BASE_URL}/change/email`,
+      { email: newEmail, code },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    console.log("✅ Email changed successfully:", response.data);
+
+    // Update user in store
+    const updatedUser = await getCurrentProfile();
+    useAuthStore.setState({ user: updatedUser });
+
+    return response.data;
+  } catch (err: any) {
+    console.error(
+      "❌ [changeEmail] Request Failed:",
+      err?.response?.data || err.message
+    );
+    throw new Error(err?.response?.data?.message || "Failed to change email");
+  }
+};
+
+/** Change user phone number */
+export const changePhone = async (
+  newPhone: string
+): Promise<UserResponseDTO> => {
+  try {
+    const { token } = useAuthStore.getState();
+
+    const response = await axios.patch<UserResponseDTO>(
+      `${BASE_URL}/change/phone`,
+      { phone: newPhone },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    console.log("✅ Phone changed successfully:", response.data);
+
+    // Update user in store
+    const updatedUser = await getCurrentProfile();
+    useAuthStore.setState({ user: updatedUser });
+
+    return response.data;
+  } catch (err: any) {
+    console.error(
+      "❌ [changePhone] Request Failed:",
+      err?.response?.data || err.message
+    );
+    throw new Error(
+      err?.response?.data?.message || "Failed to change phone number"
+    );
+  }
+};
+
+/** Change user password */
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string
+): Promise<void> => {
+  try {
+    const { token } = useAuthStore.getState();
+
+    await axios.patch(
+      `${BASE_URL}/change/password`,
+      { currentPassword, newPassword },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    console.log("✅ Password changed successfully");
+  } catch (err: any) {
+    console.error(
+      "❌ [changePassword] Request Failed:",
+      err?.response?.data || err.message
+    );
+    throw new Error(
+      err?.response?.data?.message || "Failed to change password"
+    );
   }
 };

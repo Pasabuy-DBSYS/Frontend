@@ -8,6 +8,11 @@ import axios from "axios";
 import { API_BASE_URL } from "../config";
 import { useAuthStore } from "./auth_store";
 import { Role } from "@/types/types";
+import {
+  getCurrentOrderAsCourier,
+  getCurrentOrderAsCustomer,
+  getOrderById,
+} from "../orders";
 
 interface ActiveOrderState {
   // Persisted state
@@ -19,6 +24,7 @@ interface ActiveOrderState {
   isCancelled: boolean;
   isDelivered: boolean;
   showOrderAccepted: boolean;
+  draftOfferedAmount: number;
 
   // Actions
   setActiveOrder: (order: OrderResponseDTO | null) => void;
@@ -27,6 +33,7 @@ interface ActiveOrderState {
   setIsDelivered: (arg: boolean) => void;
   setShowOrderAccepted: (arg: boolean) => void;
   setPendingReview: (arg: boolean) => void;
+  setDraftOfferedAmount: (arg: number) => void;
 
   clearActiveOrder: () => void;
   resetModalStates: () => void;
@@ -35,7 +42,7 @@ interface ActiveOrderState {
 
 export const useActiveOrderStore = create<ActiveOrderState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Persisted
       activeOrder: null,
       tempOrderRequest: null,
@@ -45,6 +52,7 @@ export const useActiveOrderStore = create<ActiveOrderState>()(
       isCancelled: false,
       isDelivered: false,
       showOrderAccepted: false,
+      draftOfferedAmount: 0,
 
       setActiveOrder: (order) => set({ activeOrder: order }),
       setTempOrderRequest: (orderRequest) =>
@@ -53,6 +61,7 @@ export const useActiveOrderStore = create<ActiveOrderState>()(
       setIsDelivered: (arg) => set({ isDelivered: arg }),
       setShowOrderAccepted: (arg) => set({ showOrderAccepted: arg }),
       setPendingReview: (arg) => set({ pendingReview: arg }),
+      setDraftOfferedAmount: (arg) => set({draftOfferedAmount: arg}),
 
       // Reset only modal states (not the order itself)
       resetModalStates: () =>
@@ -75,48 +84,73 @@ export const useActiveOrderStore = create<ActiveOrderState>()(
         await AsyncStorage.removeItem("active-order-storage");
       },
 
-      // Fetch active order from server to ensure state is in sync
+      // Refactored function using dynamic API selection
       rehydrateActiveOrder: async () => {
+        const { token, user } = useAuthStore.getState();
+
+        // Guard clause for unauthenticated users
+        if (!token || !user) {
+          console.log("🚦 [rehydrate] No token or user, skipping rehydration.");
+          return;
+        }
+
+        // 1. Map role to the correct fetching function
+        const apiMap = {
+          [Role.CUSTOMER]: getCurrentOrderAsCustomer,
+          [Role.COURIER]: getCurrentOrderAsCourier,
+        };
+        const fetchFunction = apiMap[user.currentRole];
+
+        if (!fetchFunction) {
+          console.warn(
+            "⚠️ [rehydrate] Unknown user role. Clearing local state."
+          );
+          get().clearActiveOrder();
+          return;
+        }
+
         try {
-          const { token, user } = useAuthStore.getState();
-          if (!token || !user) {
-            console.log("[rehydrate] No token or user, skipping");
-            return;
-          }
+          // 2. Call the determined API function
 
-          const BASE_URL = `${API_BASE_URL}/Orders`;
-          const endpoint =
-            user.currentRole === Role.COURIER
-              ? `${BASE_URL}/courier/activeorder`
-              : `${BASE_URL}/customer/activeorder`;
+          console.log(`FUNCTION NAME: ${fetchFunction.name}`);
+          const response = await fetchFunction();
 
-          console.log(`[rehydrate] Fetching active order from: ${endpoint}`);
-
-          const response = await axios.get<OrderResponseDTO>(endpoint, {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-          });
-
-          if (response.data) {
+          // 3. Centralized success check and update
+          // Assuming the API function returns a data object/OrderResponseDTO directly on success
+          if (response && response.orderIdPK) {
             console.log(
-              "[rehydrate] Found active order:",
-              response.data.orderIdPK
+              `✅ [rehydrate] Found active order: ${response.orderIdPK}`
             );
-            set({ activeOrder: response.data });
+            console.log(`FETCHED ORDER RESPONSE:`, JSON.stringify(response));
+
+            set({ activeOrder: response });
+          } else {
+            // API call succeeded but returned null/empty data (treat as no active order)
+            console.log(
+              "🔍 [rehydrate] API returned no active order (successful call)."
+            );
+            get().clearActiveOrder();
           }
         } catch (err: any) {
-          // 404 means no active order - this is expected
-          if (err?.response?.status === 404) {
-            console.log("[rehydrate] No active order found (404)");
-            set({ activeOrder: null });
+          const status = err?.response?.status;
+
+          // 4. Centralized error handling
+          if (status === 404) {
+            // Expected behavior when no active order exists
+            console.log(
+              "🔍 [rehydrate] Server confirmed no active order (404)."
+            );
           } else {
-            console.warn(
-              "[rehydrate] Failed to fetch active order:",
-              err?.message
+            // Handle all other unexpected errors (500, network, etc.)
+            console.error(
+              `❌ [rehydrate] Failed to fetch order (Status: ${
+                status || "Network"
+              })`,
+              err
             );
           }
+          // Always clear the local state on 404 or serious errors to prevent stale data
+          get().clearActiveOrder();
         }
       },
     }),

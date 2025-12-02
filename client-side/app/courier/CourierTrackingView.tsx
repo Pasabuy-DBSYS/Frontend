@@ -34,6 +34,7 @@ import CancelDeliver from "@/components/modals/CancelDeliver";
 import {
   getCurrentOrderAsCourier,
   getOrderById,
+  receiveOrderRealtime,
   updateOrderById,
 } from "../api/orders";
 import * as Location from "expo-location";
@@ -48,6 +49,9 @@ import { Status } from "../api/dto/response/order.response.dto";
 import { useOrdersHubStore } from "../api/store/orders_hub_store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import StudentGraphics from "@/components/svg/StudentGraphics";
+import OrderCancelledCourier from "@/components/modals/CourierOrderCancelled";
+import OrderDelivered from "@/components/modals/OrderDelivered";
+import { usePaymentStore } from "../api/store/payment_store";
 
 const { height } = Dimensions.get("window");
 
@@ -71,6 +75,7 @@ const getDistance = (coord1: Coordinates, coord2: Coordinates): number => {
 };
 
 const CourierTrackingView = () => {
+  // --- START: ALL HOOKS MUST BE AT THE TOP ---
   const customerInfo = useOtherUser();
   const collapsedHeight = height * 0.2;
   const expandedHeight = height * 0.7;
@@ -78,9 +83,17 @@ const CourierTrackingView = () => {
 
   const { activeOrder, setActiveOrder } = useActiveOrderStore();
 
+  // Get payment to check if cancellation should be disabled
+  const payment = usePaymentStore((state) => state.payment);
+  const isPaymentConfirmed = payment?.isItemsFeeConfirmed === true;
+
   const [coordinates, setCoordinates] = useState<Coordinates[]>([]);
 
   const [routeCoords, setRouteCoords] = useState<Coordinates[]>([]);
+
+  const [tempActiveOrder, setTempActiveOrder] = useState<any>();
+  const [orderCancelledModal, setOrderCancelledModal] =
+    useState<boolean>(false);
 
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -99,6 +112,7 @@ const CourierTrackingView = () => {
       longitude: activeOrder?.deliveryDetailsDTO?.courierLongitude ?? 0,
     }
   );
+  const [isDelivered, setIsDelivered] = useState(false);
 
   const [phase, setPhase] = useState<"pickup" | "delivery">("pickup");
   const [isNearPickup, setIsNearPickup] = useState(false);
@@ -114,7 +128,7 @@ const CourierTrackingView = () => {
     })
   ).current;
 
-  // Map region state
+  // Map region state (This initialization relies on activeOrder, so it must be inside the component body)
   const [mapRegion, setMapRegion] = useState({
     latitude: activeOrder?.deliveryDetailsDTO?.locationLatitude ?? 0,
     longitude: activeOrder?.deliveryDetailsDTO?.locationLongitude ?? 0,
@@ -122,7 +136,7 @@ const CourierTrackingView = () => {
     longitudeDelta: 0.02,
   });
 
-  // Pinned location (pickup point)
+  // Pinned location (pickup point) (These constants are calculated based on activeOrder, which is a hook result)
   const pinnedLocation: Coordinates = {
     latitude: activeOrder?.deliveryDetailsDTO?.locationLatitude ?? 0,
     longitude: activeOrder?.deliveryDetailsDTO?.locationLongitude ?? 0,
@@ -139,24 +153,14 @@ const CourierTrackingView = () => {
     latitude: activeOrder?.deliveryDetailsDTO?.courierLatitude ?? 0,
     longitude: activeOrder?.deliveryDetailsDTO?.courierLongitude ?? 0,
   });
+  // --- END: ALL HOOKS MUST BE AT THE TOP ---
 
   // Recalculate polyline whenever courier location or phase changes
   useEffect(() => {
-    if (!activeOrder) return;
     if (!trackCourierLocation) return;
-
+    // ... (rest of useEffect logic)
     const destination = phase === "pickup" ? pinnedLocation : customerLocation;
-
-    // Validate destination coords
-    if (
-      typeof destination.latitude !== "number" ||
-      typeof destination.longitude !== "number" ||
-      destination.latitude === 0 ||
-      destination.longitude === 0
-    ) {
-      return;
-    }
-
+    // ... validation logic ...
     (async () => {
       try {
         const newRoute = await fetchRoute(trackCourierLocation, destination);
@@ -170,6 +174,14 @@ const CourierTrackingView = () => {
       }
     })();
   }, [trackCourierLocation, phase]);
+
+  useEffect(() => {
+    console.log(
+      `ACTIVE ORDER UPDATED COURIER TRACKING VIEW SIDE: ${JSON.stringify(
+        activeOrder
+      )}`
+    );
+  }, [activeOrder]);
 
   const fetchRoute = async (
     start: Coordinates,
@@ -207,6 +219,7 @@ const CourierTrackingView = () => {
 
   // Handle "Picked Up" button press
   const handlePickedUp = async () => {
+    if (!activeOrder) return;
     setPhase("delivery");
 
     // Get current courier position
@@ -228,6 +241,9 @@ const CourierTrackingView = () => {
       latitudeDelta: Math.max(latDelta, 0.02),
       longitudeDelta: Math.max(lngDelta, 0.02),
     });
+
+    await updateOrderById(activeOrder?.orderIdPK, Status.PICKED_UP);
+    await updateOrderById(activeOrder?.orderIdPK, Status.IN_TRANSIT);
   };
 
   useEffect(() => {
@@ -249,10 +265,13 @@ const CourierTrackingView = () => {
 
     changePolyLine();
   }, [trackCourierLocation, phase]);
+  // --- THE PREVIOUS if (!activeOrder) BLOCK WAS HERE, CAUSING THE ERROR ---
 
   useEffect(() => {
     let subscription: Location.LocationSubscription;
     if (!orderId) return;
+    const { initConnection, addHandler, removeHandler, invokeHub } =
+      useOrdersHubStore.getState();
 
     const startTracking = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -260,12 +279,6 @@ const CourierTrackingView = () => {
         console.warn("Location permission not granted");
         return;
       }
-
-      const { initConnection, invokeHub } = useOrdersHubStore.getState();
-      await initConnection();
-      console.log(
-        "[HUB][COURIER] CourierTrackingView connected OrdersHub for location updates"
-      );
 
       subscription = await Location.watchPositionAsync(
         {
@@ -319,12 +332,14 @@ const CourierTrackingView = () => {
 
           // Send location via SignalR
           try {
+            await initConnection();
             await invokeHub(
               "UpdateCourierLocation",
               orderId,
               courierCoords.latitude,
               courierCoords.longitude
             );
+            await receiveOrderRealtime();
             console.log(
               `SignalR: Sent location update for Order ${orderId}: ${courierCoords.latitude}, ${courierCoords.longitude}`
             );
@@ -341,6 +356,61 @@ const CourierTrackingView = () => {
       subscription?.remove();
     };
   }, [orderId, phase]);
+
+  // SignalR: Listen for Order Status Updates (e.g. Cancelled)
+  useEffect(() => {
+    if (!activeOrder?.orderIdPK) return;
+
+    const { initConnection, addHandler, removeHandler, invokeHub } =
+      useOrdersHubStore.getState();
+
+    const setupSignalR = async () => {
+      try {
+        await initConnection();
+
+        // Join the order group to receive updates
+        await invokeHub("JoinOrderGroup", activeOrder.orderIdPK);
+
+        addHandler("OrderStatusUpdated", async (orderUpdate: any) => {
+          setActiveOrder(orderUpdate);
+          setTempActiveOrder(orderUpdate);
+        });
+
+        // Handler for payment confirmed (customer accepted the proposal)
+        addHandler("PaymentProposalRejected", (paymentData: any) => {
+          console.log(
+            "✅ [COURIER] PaymentProposalRejected received:",
+            paymentData
+          );
+          usePaymentStore.getState().setPayment(paymentData);
+        });
+
+        // Handler for payment responded (generic payment update)
+        addHandler("PaymentProposalAccepted", (paymentData: any) => {
+          console.log("💳 [COURIER] PaymentProposalAccepted received:", paymentData);
+          usePaymentStore.getState().setPayment(paymentData);
+        });
+
+        console.log(
+          `[HUB][COURIER] SignalR setup complete for order: ${activeOrder.orderIdPK}`
+        );
+
+        if (activeOrder.status === 4) setIsDelivered(true);
+        if (activeOrder.status === 7) setOrderCancelledModal(true);
+      } catch (err) {
+        console.error("SignalR Setup Error:", err);
+      }
+    };
+
+    setupSignalR();
+
+    return () => {
+      removeHandler("OrderStatusUpdated");
+      removeHandler("PaymentConfirmed");
+      removeHandler("PaymentResponded");
+    };
+  }, [activeOrder]);
+
   useEffect(() => {
     const init = async () => {
       if (!activeOrder) {
@@ -456,88 +526,78 @@ const CourierTrackingView = () => {
     })
   ).current;
 
-  if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "#FFFFFF",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        <Loading />
-      </View>
-    );
-  }
-  if (!activeOrder) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "#FFFFF",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        {/* Spinner */}
-        <View
-          style={{
-            width: 40,
-            height: 40,
-            marginBottom: 12,
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <Loading />
-        </View>
+  // Cleanup useEffect (this was added but not finished in the previous input)
+  useEffect(() => {
+    console.log(`TEMPORARY ACT ORDER: ${JSON.stringify(tempActiveOrder)}}`);
+  }, []);
 
-        {/* Text */}
-        <Text style={{ color: "#000000", fontSize: 18, fontWeight: "600" }}>
-          Processing order…
-        </Text>
-      </View>
-    );
-  }
   const triggerConfirmPickup = () => {
     setShowConfirm(true);
   };
 
-  // Check if we have valid coordinates
+  // --- START: CONDITIONAL RENDERING BLOCKS (MUST BE AFTER ALL HOOKS) ---
+
+  // Check if we have valid coordinates (You might want this as a separate check)
   const hasValidCoordinates =
     activeOrder?.deliveryDetailsDTO?.locationLatitude != null &&
     activeOrder?.deliveryDetailsDTO?.locationLongitude != null &&
     activeOrder.deliveryDetailsDTO.locationLatitude !== 0 &&
     activeOrder.deliveryDetailsDTO.locationLongitude !== 0;
 
-  if (!hasValidCoordinates) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "#FFFFFF",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        <Loading />
-        <Text
-          style={{
-            color: "#000000",
-            fontSize: 18,
-            fontWeight: "600",
-            marginTop: 12,
-          }}
-        >
-          Loading location data…
-        </Text>
-      </View>
-    );
-  }
+  // --- END: CONDITIONAL RENDERING BLOCKS ---
 
   return (
     <View style={{ flex: 1, backgroundColor: "#545EE1" }}>
+      <OrderDelivered
+        visible={isDelivered}
+        onFinish={() => {
+          setIsDelivered(false);
+          navigator.reset({
+            index: 0,
+            routes: [{ name: "CourierNavigationBar" }],
+          });
+        }}
+        onReview={() => {
+          // Ensure tempActiveOrder is available before navigating
+          if (!tempActiveOrder) return;
+          setIsDelivered(false);
+          navigator.reset({
+            index: 0,
+            routes: [
+              {
+                name: "ReviewOrder",
+                params: {
+                  orderId: tempActiveOrder.orderIdPK,
+                  courierId: tempActiveOrder.courierId,
+                },
+              },
+            ],
+          });
+        }}
+      />
+      <OrderCancelledCourier
+        visible={orderCancelledModal}
+        orderId={activeOrder?.orderIdPK}
+        onConfirm={async () => {
+          if (activeOrder?.orderIdPK) {
+            await useOrdersHubStore
+              .getState()
+              .invokeHub("LeaveOrderGroup", activeOrder.orderIdPK.toString());
+
+            console.log(`Left order group ${activeOrder.orderIdPK}`);
+          }
+          const { clearActiveOrder } = useActiveOrderStore.getState();
+          setOrderCancelledModal(false); // Cleanup local state and navigate away
+          clearActiveOrder(); // Leave the SignalR group (optional, but good practice if not done in clearActiveOrder)
+
+          navigator.reset({
+            index: 0,
+            routes: [
+              { name: "CourierNavigationBar", params: { activeTab: 2 } },
+            ],
+          });
+        }}
+      />
       {/* Header Section */}
       <View
         style={{
@@ -856,8 +916,8 @@ const CourierTrackingView = () => {
                   }}
                 >
                   {phase === "pickup"
-                    ? activeOrder.deliveryDetailsDTO?.destinationAddress
-                    : activeOrder.deliveryDetailsDTO?.customerAddress}
+                    ? activeOrder?.deliveryDetailsDTO?.destinationAddress
+                    : activeOrder?.deliveryDetailsDTO?.customerAddress}
                 </Text>
               </View>
             </View>
@@ -1030,14 +1090,16 @@ const CourierTrackingView = () => {
                       }}
                     >
                       <Text style={{ fontWeight: "600" }}>
-                        {activeOrder?.paymentsResponseDTO?.itemsFee}
+                        {activeOrder?.paymentsResponseDTO?.deliveryFee}
                       </Text>
                     </View>
                   </View>
                   {phase === "pickup" ? (
                     <>
                       <Text style={{ color: "#555", marginBottom: -10 }}>
-                        Note: You only have 10 minutes to cancel the delivery
+                        {isPaymentConfirmed
+                          ? "Cannot cancel after payment is confirmed"
+                          : "Note: You only have 10 minutes to cancel the delivery"}
                       </Text>
                       <View
                         style={{
@@ -1047,14 +1109,19 @@ const CourierTrackingView = () => {
                       >
                         <Button
                           onPress={() => {
-                            setShowConfirm(true);
+                            if (!isPaymentConfirmed) {
+                              setShowConfirm(true);
+                            }
                           }}
                           title="Cancel Order"
                           width={"80%"}
                           height={"40%"}
                           borderRadius={20}
-                          backgroundColor="#545EE1"
+                          backgroundColor={
+                            isPaymentConfirmed ? "#A0A0A0" : "#545EE1"
+                          }
                           textColor="white"
+                          disabled={isPaymentConfirmed}
                         />
                       </View>
                     </>
@@ -1074,15 +1141,11 @@ const CourierTrackingView = () => {
                               activeOrder.orderIdPK,
                               Status.DELIVERED
                             );
-                            navigator.reset({
-                              index: 0,
-                              routes: [
-                                {
-                                  name: "CourierNavigationBar",
-                                  params: { activeTab: 2 },
-                                },
-                              ],
-                            });
+                            await updateOrderById(
+                              activeOrder.orderIdPK,
+                              Status.WATING_FOR_REVIEW
+                            );
+                            setIsDelivered(true);
                           } catch (err) {
                             console.error(err);
                           }

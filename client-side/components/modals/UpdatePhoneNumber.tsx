@@ -1,22 +1,66 @@
-import React from "react";
-import { Modal, View, Text, TouchableOpacity, Dimensions } from "react-native";
+import React, { useState, useEffect } from "react";
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Dimensions,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import { BlurView } from "expo-blur";
+import { changePhone } from "@/app/api/user";
+import { useAuthStore } from "@/app/api/store/auth_store";
 
 const { width } = Dimensions.get("window");
 
 interface UpdatePhoneNumberProps {
   visible: boolean;
-  phoneNumber: string;
   onClose: () => void;
-  onChangePress: () => void;
+  onSave: () => void;
 }
 
 const UpdatePhoneNumber: React.FC<UpdatePhoneNumberProps> = ({
   visible,
-  phoneNumber,
   onClose,
-  onChangePress,
+  onSave,
 }) => {
+  const { user } = useAuthStore();
+  const [phone, setPhone] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    if (visible && user) {
+      setPhone(user.phone || "");
+      setIsEditing(false);
+    }
+  }, [visible, user]);
+
+  const handleSave = async () => {
+    if (!phone.trim()) {
+      Alert.alert("Error", "Phone number is required");
+      return;
+    }
+
+    if (phone.trim().length < 10) {
+      Alert.alert("Error", "Please enter a valid phone number");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await changePhone(phone.trim());
+      Alert.alert("Success", "Phone number updated successfully");
+      onSave();
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to update phone number");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Modal
       transparent
@@ -78,62 +122,133 @@ const UpdatePhoneNumber: React.FC<UpdatePhoneNumberProps> = ({
                 marginBottom: 10,
               }}
             >
-              Your phone number:
+              {isEditing ? "Update phone number" : "Your phone number:"}
             </Text>
 
-            {/* Phone Number */}
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "700",
-                color: "#000000",
-                textAlign: "center",
-                marginBottom: 16,
-              }}
-            >
-              {phoneNumber}
-            </Text>
+            {isEditing ? (
+              <>
+                {/* Phone Input */}
+                <TextInput
+                  value={phone}
+                  onChangeText={setPhone}
+                  placeholder="Enter phone number"
+                  keyboardType="phone-pad"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#D1D5DB",
+                    borderRadius: 10,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    fontSize: 15,
+                    color: "#111827",
+                    width: "100%",
+                    marginBottom: 16,
+                  }}
+                />
 
-            {/* Description */}
-            <Text
-              style={{
-                fontSize: 13,
-                color: "#6B7280",
-                textAlign: "center",
-                marginBottom: 28,
-              }}
-            >
-              This phone number is linked to your account{"\n"}and is only
-              visible to you.
-            </Text>
+                {/* Description */}
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: "#6B7280",
+                    textAlign: "center",
+                    marginBottom: 28,
+                  }}
+                >
+                  This phone number will be linked to your account{"\n"}and is
+                  only visible to you.
+                </Text>
 
-            {/* Action Button */}
-            <TouchableOpacity
-              onPress={onChangePress}
-              activeOpacity={0.8}
-              style={{
-                backgroundColor: "#545EE1",
-                borderRadius: 30,
-                paddingVertical: 14,
-                width: "100%",
-                alignItems: "center",
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.25,
-                shadowRadius: 4,
-                elevation: 5,
-              }}
-            >
-              <Text
-                style={{
-                  color: "#FFFFFF",
-                  fontWeight: "700",
-                  fontSize: 15,
-                }}
-              >
-                Change phone number
-              </Text>
-            </TouchableOpacity>
+                {/* Save Button */}
+                <TouchableOpacity
+                  onPress={handleSave}
+                  disabled={loading}
+                  activeOpacity={0.8}
+                  style={{
+                    backgroundColor: loading ? "#9CA3AF" : "#545EE1",
+                    borderRadius: 30,
+                    paddingVertical: 14,
+                    width: "100%",
+                    alignItems: "center",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 4,
+                    elevation: 5,
+                  }}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text
+                      style={{
+                        color: "#FFFFFF",
+                        fontWeight: "700",
+                        fontSize: 15,
+                      }}
+                    >
+                      Save
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {/* Phone Number Display */}
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: "700",
+                    color: "#000000",
+                    textAlign: "center",
+                    marginBottom: 16,
+                  }}
+                >
+                  {user?.phone || "Not set"}
+                </Text>
+
+                {/* Description */}
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: "#6B7280",
+                    textAlign: "center",
+                    marginBottom: 28,
+                  }}
+                >
+                  This phone number is linked to your account{"\n"}and is only
+                  visible to you.
+                </Text>
+
+                {/* Action Button */}
+                <TouchableOpacity
+                  onPress={() => setIsEditing(true)}
+                  activeOpacity={0.8}
+                  style={{
+                    backgroundColor: "#545EE1",
+                    borderRadius: 30,
+                    paddingVertical: 14,
+                    width: "100%",
+                    alignItems: "center",
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 4,
+                    elevation: 5,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontWeight: "700",
+                      fontSize: 15,
+                    }}
+                  >
+                    Change phone number
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </BlurView>

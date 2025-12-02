@@ -1,211 +1,303 @@
-import React, { useState } from "react";
-import { View, Text, FlatList, TouchableOpacity, Platform } from "react-native";
+import React, { useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  Platform,
+  ActivityIndicator,
+  PanResponder,
+  Animated,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { useNotificationStore } from "@/app/api/store/notification_store";
+import { useNotificationHubStore } from "@/app/api/store/notification_hub_store";
+import { NotificationResponseDTO } from "@/app/api/dto/response/notification.response.dto";
+import { useAuthStore } from "@/app/api/store/auth_store";
+import { Role } from "@/types/types";
+import { deleteNotification } from "@/app/api/notifications";
 
-interface Notification {
-  id: string;
-  type: "order" | "delivery" | "promo" | "system";
-  title: string;
-  message: string;
-  time: string;
-  isRead: boolean;
-}
-
-// Dummy notification data
-const DUMMY_NOTIFICATIONS: Notification[] = [
-  {
-    id: "1",
-    type: "order",
-    title: "Order Accepted",
-    message:
-      "Your order #11250 has been accepted by a courier. They're on their way to pick up your items.",
-    time: "2 mins ago",
-    isRead: false,
-  },
-  {
-    id: "2",
-    type: "delivery",
-    title: "Delivery Complete",
-    message:
-      "Order #11231 has been delivered successfully. Don't forget to rate your courier!",
-    time: "1 hour ago",
-    isRead: false,
-  },
-  {
-    id: "3",
-    type: "promo",
-    title: "🎉 Special Offer!",
-    message: "Get 20% off on your next order! Use code PASABUY20 at checkout.",
-    time: "3 hours ago",
-    isRead: true,
-  },
-  {
-    id: "4",
-    type: "system",
-    title: "Welcome to Pasabuy!",
-    message:
-      "Thank you for joining Pasabuy. Start ordering or become a courier today!",
-    time: "1 day ago",
-    isRead: true,
-  },
-  {
-    id: "5",
-    type: "order",
-    title: "Order Cancelled",
-    message:
-      "Your order #11200 has been cancelled. The refund will be processed within 3-5 business days.",
-    time: "2 days ago",
-    isRead: true,
-  },
-  {
-    id: "6",
-    type: "delivery",
-    title: "Courier Nearby",
-    message:
-      "Your courier is less than 1km away. Please prepare to receive your order.",
-    time: "3 days ago",
-    isRead: true,
-  },
-];
-
+// Get icon based on notification title
 const getNotificationIcon = (
-  type: Notification["type"]
+  title: string
 ): { name: keyof typeof Ionicons.glyphMap; color: string; bgColor: string } => {
-  switch (type) {
-    case "order":
-      return { name: "cart", color: "#545EE1", bgColor: "#E8EBFF" };
-    case "delivery":
-      return { name: "bicycle", color: "#4CAF50", bgColor: "#E8F5E9" };
-    case "promo":
-      return { name: "pricetag", color: "#FF9800", bgColor: "#FFF3E0" };
-    case "system":
-      return {
-        name: "information-circle",
-        color: "#2196F3",
-        bgColor: "#E3F2FD",
-      };
-    default:
-      return { name: "notifications", color: "#666", bgColor: "#F5F5F5" };
+  const lowerTitle = title.toLowerCase();
+
+  if (lowerTitle.includes("accepted")) {
+    return { name: "checkmark-circle", color: "#4CAF50", bgColor: "#E8F5E9" };
+  }
+  if (lowerTitle.includes("picked up")) {
+    return { name: "bag-check", color: "#2196F3", bgColor: "#E3F2FD" };
+  }
+  if (lowerTitle.includes("transit") || lowerTitle.includes("on the way")) {
+    return { name: "bicycle", color: "#FF9800", bgColor: "#FFF3E0" };
+  }
+  if (lowerTitle.includes("delivered")) {
+    return { name: "gift", color: "#4CAF50", bgColor: "#E8F5E9" };
+  }
+  if (lowerTitle.includes("cancelled")) {
+    return { name: "close-circle", color: "#F44336", bgColor: "#FFEBEE" };
+  }
+  if (lowerTitle.includes("review")) {
+    return { name: "star", color: "#FFC107", bgColor: "#FFF8E1" };
+  }
+  if (lowerTitle.includes("order")) {
+    return { name: "cart", color: "#545EE1", bgColor: "#E8EBFF" };
+  }
+
+  return { name: "notifications", color: "#666", bgColor: "#F5F5F5" };
+};
+
+// Format time for display
+const formatNotificationTime = (dateString: string): string => {
+  if (!dateString) return "";
+
+  try {
+    const isoString = dateString.replace(" ", "T");
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? "s" : ""} ago`;
+    if (diffHours < 24)
+      return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+
+    return new Intl.DateTimeFormat("en-PH", {
+      month: "short",
+      day: "numeric",
+      timeZone: "Asia/Manila",
+    }).format(date);
+  } catch (error) {
+    return "";
   }
 };
 
-interface NotificationsProps {
-  isCourier?: boolean;
+
+interface NotificationItemProps {
+  item: NotificationResponseDTO;
+  onMarkAsRead: (id: number) => void;
+  onDelete: (id: number) => void;
 }
 
-const Notifications: React.FC<NotificationsProps> = ({ isCourier = false }) => {
-  const [notifications, setNotifications] =
-    useState<Notification[]>(DUMMY_NOTIFICATIONS);
+interface NotificationItemProps {
+  item: NotificationResponseDTO;
+  onMarkAsRead: (id: number) => void;
+  onDelete: (id: number) => void;
+}
 
-  const markAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((notif) =>
-        notif.id === id ? { ...notif, isRead: true } : notif
-      )
-    );
-  };
+const NotificationItem: React.FC<NotificationItemProps> = ({
+  item,
+  onMarkAsRead,
+  onDelete,
+}) => {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const icon = getNotificationIcon(item.title);
+  const isRead = item.pressed;
 
-  const markAllAsRead = () => {
-    setNotifications((prev) =>
-      prev.map((notif) => ({ ...notif, isRead: true }))
-    );
-  };
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) => {
+        // Activate if horizontal move is significant
+        return Math.abs(gesture.dx) > 10 && Math.abs(gesture.dy) < 10;
+      },
+      onPanResponderMove: (_, gesture) => {
+        // Track if swiping RIGHT (positive dx)
+        if (gesture.dx > 0) {
+          translateX.setValue(gesture.dx);
+        }
+      },
+      onPanResponderRelease: (_, gesture) => {
+        // Check if swiped far enough to the RIGHT (over 100)
+        if (gesture.dx > 100) {
+          Animated.timing(translateX, {
+            // Animate off-screen to the RIGHT
+            toValue: 500,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            onDelete(item.notificationPkId);
+          });
+        } else {
+          // Snap back to original position
+          Animated.spring(translateX, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 10,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
-
-  const renderNotification = ({ item }: { item: Notification }) => {
-    const icon = getNotificationIcon(item.type);
-
-    return (
-      <TouchableOpacity
-        onPress={() => markAsRead(item.id)}
-        activeOpacity={0.8}
+  return (
+    <View style={{ marginBottom: 10 }}>
+      {/* Delete button positioned on the LEFT, visible when swiping right */}
+      <View
         style={{
-          backgroundColor: item.isRead ? "white" : "#F0F4FF",
+          position: "absolute",
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: "100%",
+          backgroundColor: "#FFEBEE",
           borderRadius: 12,
-          padding: 14,
-          marginBottom: 10,
-          flexDirection: "row",
-          alignItems: "flex-start",
-          borderLeftWidth: item.isRead ? 0 : 3,
-          borderLeftColor: "#545EE1",
+          justifyContent: "center",
+          alignItems: "flex-start", // Align icon to the start (left)
+          paddingLeft: 20,
+        }}
+      >
+        <Ionicons name="trash-outline" size={24} color="#F44336" />
+      </View>
+
+      <Animated.View
+        style={{
+          transform: [{ translateX }],
+          backgroundColor: isRead ? "white" : "#F0F4FF",
+          borderRadius: 12,
+          // Removed original borderLeft logic entirely
           shadowColor: "#000",
           shadowOpacity: 0.05,
           shadowRadius: 4,
           shadowOffset: { width: 0, height: 2 },
           elevation: 2,
         }}
+        {...panResponder.panHandlers}
       >
-        <View
+        <TouchableOpacity
+          onPress={() => onMarkAsRead(item.notificationPkId)}
+          activeOpacity={0.9}
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: icon.bgColor,
-            justifyContent: "center",
-            alignItems: "center",
-            marginRight: 12,
+            padding: 14,
+            flexDirection: "row",
+            alignItems: "flex-start",
           }}
         >
-          <Ionicons name={icon.name} size={20} color={icon.color} />
-        </View>
-
-        <View style={{ flex: 1 }}>
           <View
             style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: icon.bgColor,
+              justifyContent: "center",
               alignItems: "center",
+              marginRight: 12,
             }}
           >
-            <Text
-              style={{
-                fontSize: 15,
-                fontWeight: item.isRead ? "500" : "700",
-                color: "#333",
-                flex: 1,
-              }}
-              numberOfLines={1}
-            >
-              {item.title}
-            </Text>
-            {!item.isRead && (
-              <View
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: "#545EE1",
-                  marginLeft: 8,
-                }}
-              />
-            )}
+            <Ionicons name={icon.name} size={20} color={icon.color} />
           </View>
 
-          <Text
-            style={{
-              fontSize: 13,
-              color: "#666",
-              marginTop: 4,
-              lineHeight: 18,
-            }}
-            numberOfLines={2}
-          >
-            {item.message}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: isRead ? "500" : "700",
+                  color: "#333",
+                  flex: 1,
+                }}
+                numberOfLines={1}
+              >
+                {item.title}
+              </Text>
+              {!isRead && (
+                <View
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: "#545EE1",
+                    marginLeft: 8,
+                  }}
+                />
+              )}
+            </View>
 
-          <Text
-            style={{
-              fontSize: 11,
-              color: "#999",
-              marginTop: 6,
-            }}
-          >
-            {item.time}
-          </Text>
-        </View>
-      </TouchableOpacity>
+            <Text
+              style={{
+                fontSize: 13,
+                color: "#666",
+                marginTop: 4,
+                lineHeight: 18,
+              }}
+              numberOfLines={2}
+            >
+              {item.message}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+};
+
+interface NotificationsProps {
+  isCourier?: boolean;
+}
+
+const Notifications: React.FC<NotificationsProps> = ({}) => {
+  const { user } = useAuthStore();
+  const isCourier = user?.currentRole === Role.COURIER;
+
+  const {
+    notifications,
+    unreadCount,
+    isLoading,
+    fetchNotifications,
+    markAsRead,
+    markAllAsRead,
+    addNotification,
+    deleteNotification,
+  } = useNotificationStore();
+
+  const { addHandler, removeHandler } = useNotificationHubStore();
+
+  // Fetch notifications on mount and setup real-time listener
+  useEffect(() => {
+    fetchNotifications();
+
+    console.log(`NOTIFCATIONS: ${JSON.stringify(notifications)}`);
+    // Listen for real-time notifications
+    const handleReceiveNotification = (
+      notification: NotificationResponseDTO
+    ) => {
+      console.log("📬 Received notification:", notification);
+      addNotification(notification);
+    };
+
+    addHandler("ReceiveNotification", handleReceiveNotification);
+
+    return () => {
+      removeHandler("ReceiveNotification");
+    };
+  }, []);
+
+  const handleMarkAsRead = async (notificationId: number) => {
+    await markAsRead(notificationId);
+  };
+
+  const handleMarkAllAsRead = async () => {
+    await markAllAsRead();
+  };
+
+  const renderNotification = ({ item }: { item: NotificationResponseDTO }) => {
+    return (
+      <NotificationItem
+        item={item}
+        onMarkAsRead={handleMarkAsRead}
+        onDelete={deleteNotification}
+      />
     );
   };
 
@@ -257,7 +349,7 @@ const Notifications: React.FC<NotificationsProps> = ({ isCourier = false }) => {
 
           {unreadCount > 0 && (
             <TouchableOpacity
-              onPress={markAllAsRead}
+              onPress={handleMarkAllAsRead}
               style={{
                 backgroundColor: isCourier
                   ? "#E8EBFF"
@@ -281,7 +373,20 @@ const Notifications: React.FC<NotificationsProps> = ({ isCourier = false }) => {
         </View>
 
         {/* Notifications List */}
-        {notifications.length === 0 ? (
+        {isLoading ? (
+          <View
+            style={{
+              flex: 1,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <ActivityIndicator size="large" color="#545EE1" />
+            <Text style={{ marginTop: 10, color: "#666" }}>
+              Loading notifications...
+            </Text>
+          </View>
+        ) : notifications.length === 0 ? (
           <View
             style={{
               flex: 1,
@@ -307,7 +412,7 @@ const Notifications: React.FC<NotificationsProps> = ({ isCourier = false }) => {
         ) : (
           <FlatList
             data={notifications}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.notificationPkId.toString()}
             renderItem={renderNotification}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 100 }}

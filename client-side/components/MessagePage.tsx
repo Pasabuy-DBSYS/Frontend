@@ -1,4 +1,5 @@
 import ParticipantHeader, { Participant } from "@/components/ParticipantHeader";
+import PaymentBanner from "@/components/PaymentBanner";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ActivityIndicator,
@@ -19,6 +20,7 @@ import {
   loadImageByKey,
   postImageMessage,
 } from "@/app/api/chat";
+import { getChatRoomByOrderId } from "@/app/api/chatroom";
 import { ChatMessagesResponseDTO } from "@/app/api/dto/response/chat.response.dto";
 import {
   RoomInfo,
@@ -38,24 +40,102 @@ import { useOtherUser } from "@/app/api/hook/useOtherUser";
 import { UserResponseDTO } from "@/app/api/dto/response/auth.response.dto";
 import { useIsFocused } from "@react-navigation/native";
 import { useActiveOrderStore } from "@/app/api/store/order_store";
+import { RNFile } from "@/app/api/dto/request/auth.request.dto";
+import { postPayment, confirmPayment, rejectPayment } from "@/app/api/payment";
+import { PaymentRequestDTO } from "@/app/api/dto/request/payment.request";
+import { useOrdersHubStore } from "@/app/api/store/orders_hub_store";
+import { usePaymentStore } from "@/app/api/store/payment_store";
 
 export default function MessagePage() {
   const otherUser = useOtherUser();
   const activeOrder = useActiveOrderStore((state) => state.activeOrder);
+  const { user } = useAuthStore();
+  const payment = usePaymentStore((state) => state.payment);
+  const { setPayment, rehydratePayment } = usePaymentStore.getState();
   const [draft, setDraft] = useState("");
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
-
+  const [imageData, setImageData] = useState<RNFile>();
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   // Get the offered amount from the active order
   const offeredAmount = activeOrder?.paymentsResponseDTO?.proposedItemsFee ?? 0;
+  const { draftOfferedAmount } = useActiveOrderStore.getState();
+
+  // Check if current user is customer (role 0 = customer, role 1 = courier)
+  const isCustomer = user?.currentRole === 0;
 
   // Pending image uploads: { tempId, localUri, progress }
   const [pendingUploads, setPendingUploads] = useState<
     { tempId: string; localUri: string; progress: number }[]
   >([]);
 
+  // roomId state - subscribe directly to activeOrder changes
+  const orderRoomId = useActiveOrderStore(
+    (state) => state.activeOrder?.chatRoomResponseDTO?.roomIdPK ?? null
+  );
+
+  // Also get from message room store as fallback
+  const messageRoomId = useMessageRoomState(
+    (state) => state.messageRoomParticipants?.roomId ?? null
+  );
+
+  // Use whichever roomId is available (order takes priority)
+  const roomId = orderRoomId ?? messageRoomId;
+
+  // Track if we're still loading/rehydrating
+  const [isRehydrating, setIsRehydrating] = useState(true);
+
+  // Rehydrate everything on mount
+  useEffect(() => {
+    const rehydrateAll = async () => {
+      console.log("[MessagePage] Starting full rehydration...");
+
+      // Rehydrate payment
+      rehydratePayment();
+
+      // Rehydrate message room using getChatRoomByOrderId
+      if (activeOrder?.orderIdPK) {
+        try {
+          const chatRoom = await getChatRoomByOrderId(activeOrder.orderIdPK);
+          const { setMessageRoomParticipants } = useMessageRoomState.getState();
+
+          setMessageRoomParticipants({
+            roomId: chatRoom.roomIdPK,
+            senderId: activeOrder.courierId ?? null,
+            receiverId: activeOrder.customerId ?? null,
+          });
+
+          console.log(
+            `✅ [MessagePage] Chat room fetched: roomId=${chatRoom.roomIdPK}`
+          );
+        } catch (err) {
+          console.error("[MessagePage] Failed to fetch chat room:", err);
+        }
+      }
+
+      // Rehydrate messages from API
+      const { rehydrateMessages } = useMessageCacheStore.getState();
+      await rehydrateMessages();
+
+      setIsRehydrating(false);
+    };
+
+    rehydrateAll();
+  }, [activeOrder?.orderIdPK]);
+
+  // Fetch messages when roomId becomes available
+  useEffect(() => {
+    if (roomId) {
+      console.log(
+        `[MessagePage] roomId available: ${roomId}, fetching messages...`
+      );
+      const { rehydrateMessages } = useMessageCacheStore.getState();
+      rehydrateMessages();
+    }
+  }, [roomId]);
+
+  // Get info for sending messages (uses the hooks properly)
   const info = useMessageRoomInfo();
-  const roomId = info?.roomId ?? null;
 
   // Read the entire messagesByRoom object and memoize the specific room's messages
   const messagesByRoom = useMessageCacheStore((state) => state.messagesByRoom);
@@ -69,6 +149,17 @@ export default function MessagePage() {
 
   const formatFullName = (u: UserResponseDTO) => {
     return [u?.firstName, u?.middleName, u?.lastName].filter(Boolean).join(" ");
+  };
+
+  // Payment handlers - API functions now handle store updates automatically
+  const handleAcceptPayment = async () => {
+    if (!activeOrder?.orderIdPK) return;
+    await confirmPayment(activeOrder.orderIdPK);
+  };
+
+  const handleRejectPayment = async () => {
+    if (!activeOrder?.orderIdPK) return;
+    await rejectPayment(activeOrder.orderIdPK);
   };
 
   const flatListRef = useRef<FlatList<ChatMessagesResponseDTO>>(null);
@@ -191,6 +282,15 @@ export default function MessagePage() {
 
   const handlePickCamera = async () => {
     const image = await openCamera();
+
+    setImageData({
+      name: image?.name || "",
+      type: image?.type || "",
+      uri: image?.uri || "",
+    });
+
+    console.log(`IMAGE DATA: ${JSON.stringify(imageData)}`);
+
     if (!image) return;
     await uploadImage(image);
   };
@@ -199,9 +299,28 @@ export default function MessagePage() {
     image: { uri: string; name: string; type: string },
     amount: number
   ) => {
-    // TODO: You can use the amount here if needed (e.g., send to backend)
     console.log(`[RECEIPT] Amount: ₱${amount}`);
-    await uploadImage(image);
+    setIsSubmittingPayment(true);
+
+    try {
+      const request = {
+        orderIdFK: activeOrder?.orderIdPK!,
+        itemsFee: amount,
+        image: {
+          name: image.name,
+          type: image.type,
+          uri: image.uri,
+        },
+      };
+
+      console.log(`PAYMENT REQUEST: ${JSON.stringify(request)}`);
+      // postPayment automatically updates the payment store
+      await postPayment(request);
+    } catch (err) {
+      console.error("Failed to submit payment proposal:", err);
+    } finally {
+      setIsSubmittingPayment(false);
+    }
   };
 
   const messageRoomParticipants = useMessageRoomState(
@@ -350,6 +469,15 @@ export default function MessagePage() {
         onMore={() => console.log("more actions")}
       />
 
+      {/* Payment Banner - shows below header when there's a pending payment */}
+      <PaymentBanner
+        payment={payment}
+        onAccept={handleAcceptPayment}
+        onReject={handleRejectPayment}
+        isCustomer={isCustomer}
+        isSubmitting={isSubmittingPayment}
+      />
+
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -362,7 +490,22 @@ export default function MessagePage() {
             return false;
           }}
         >
-          {!roomId ? (
+          {isRehydrating ? (
+            <View
+              style={{
+                flex: 1,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <ActivityIndicator size="large" color="#545EE1" />
+              <Text
+                style={{ color: "#555", textAlign: "center", marginTop: 12 }}
+              >
+                Loading messages...
+              </Text>
+            </View>
+          ) : !roomId ? (
             <View
               style={{
                 flex: 1,
@@ -493,7 +636,7 @@ export default function MessagePage() {
               onSend={handleSend}
               onPickCamera={handlePickCamera}
               onUploadReceipt={handleUploadReceipt}
-              offeredAmount={offeredAmount}
+              offeredAmount={draftOfferedAmount}
             />
           </View>
         </View>

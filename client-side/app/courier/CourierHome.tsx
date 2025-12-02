@@ -16,24 +16,23 @@ import { useNavigation } from "@react-navigation/native";
 import { changeRole } from "../api/user";
 import { useAuthStore } from "../api/store/auth_store";
 import { useActiveOrderStore } from "../api/store/order_store";
+import { useOrdersHubStore } from "../api/store/orders_hub_store";
 import { Status } from "../api/dto/response/order.response.dto";
 
 const screenWidth = Dimensions.get("window").width;
 
-const CourierHome = () => {
+interface CourierHomeProps {
+  setActiveTab?: (tab: number) => void;
+}
+
+const CourierHome = ({ setActiveTab }: CourierHomeProps) => {
   const [toggleModal, setToggleModal] = useState<boolean>(false);
   const navigator = useNavigation();
   const { user } = useAuthStore();
   const { activeOrder } = useActiveOrderStore();
 
-  const hasActiveDelivery =
-    activeOrder &&
-    activeOrder.status !== Status.CANCELLED &&
-    activeOrder.status !== Status.DELIVERED &&
-    activeOrder.status !== Status.REVIEWED;
-
   const switchRole = () => {
-    if (hasActiveDelivery) {
+    if (activeOrder) {
       return; // Don't allow switching if there's an active delivery
     }
     setToggleModal(true);
@@ -42,9 +41,26 @@ const CourierHome = () => {
   const switchRolePersist = async () => {
     try {
       console.log(`OLD TOKEN: ${useAuthStore.getState().token}`);
-      const { newToken } = await changeRole();
-      await useAuthStore.getState().refreshToken(newToken);
-      console.log(`NEW TOKEN: ${newToken}`);
+
+      // 1. Change role on server & update token
+      const { newToken, user } = await changeRole();
+
+      // 2. If we got a new token, ensure it's set
+      if (newToken && typeof newToken === "string") {
+        await useAuthStore.getState().refreshToken(newToken);
+      }
+      console.log(`NEW TOKEN: ${newToken ? "✅ received" : "❌ missing"}`);
+
+      // 3. Disconnect and rejoin with new role
+      const { disconnect, initConnection, invokeHub } =
+        useOrdersHubStore.getState();
+      await disconnect();
+      await initConnection();
+      await invokeHub("JoinCustomerGroup");
+      console.log("[SWITCH] Joined CustomerGroup");
+
+      // 4. Rehydrate active order for the NEW role
+      await useActiveOrderStore.getState().rehydrateActiveOrder();
     } catch (error) {
       console.error("Error changing role:", error);
     }
@@ -160,15 +176,15 @@ const CourierHome = () => {
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    backgroundColor: hasActiveDelivery ? "#ccc" : "#545EE1",
+                    backgroundColor: activeOrder ? "#ccc" : "#545EE1",
                     paddingVertical: 10,
                     paddingHorizontal: 16,
                     borderRadius: 12,
                     gap: 8,
-                    opacity: hasActiveDelivery ? 0.6 : 1,
+                    opacity: activeOrder ? 0.6 : 1,
                   }}
                   onPress={switchRole}
-                  disabled={!!hasActiveDelivery}
+                  disabled={!!activeOrder}
                 >
                   <SwitchIcon />
                   <Text style={{ color: "white", fontWeight: "600" }}>
@@ -180,7 +196,7 @@ const CourierHome = () => {
           </View>
 
           {/* Active Delivery Banner */}
-          {hasActiveDelivery && (
+          {activeOrder && (
             <View style={{ paddingHorizontal: 24, marginTop: 24 }}>
               <TouchableOpacity
                 style={{
@@ -262,7 +278,7 @@ const CourierHome = () => {
                   shadowRadius: 10,
                   elevation: 5,
                 }}
-                onPress={() => navigator.navigate("OrderList" as never)}
+                onPress={() => setActiveTab?.(0)}
               >
                 <View
                   style={{
@@ -306,7 +322,7 @@ const CourierHome = () => {
                   shadowRadius: 10,
                   elevation: 5,
                 }}
-                onPress={() => navigator.navigate("OrderHistory" as never)}
+                onPress={() => setActiveTab?.(3)}
               >
                 <View
                   style={{

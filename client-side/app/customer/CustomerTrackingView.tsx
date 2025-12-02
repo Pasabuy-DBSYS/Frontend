@@ -59,6 +59,7 @@ import StudentGraphics from "@/components/svg/StudentGraphics";
 import Camera from "@/components/svg/Camera";
 import OrderDelivered from "@/components/modals/OrderDelivered";
 import { navigate } from "expo-router/build/global-state/routing";
+import { usePaymentStore } from "../api/store/payment_store";
 
 const { height } = Dimensions.get("window");
 
@@ -69,7 +70,7 @@ const CustomerTrackingView = () => {
   const [showCancel, setShowCancel] = useState(false);
   const [expandedHeight, setExpandedHeight] = useState(height * 0.6);
   const animatedHeight = useRef(new Animated.Value(initialHeight)).current;
-
+  const [disabledButton, setDisabledButton] = useState(false);
   const {
     activeOrder,
     isCancelled,
@@ -85,6 +86,11 @@ const CustomerTrackingView = () => {
     resetModalStates,
   } = useActiveOrderStore();
 
+  // Get payment to check if cancellation should be disabled
+  const payment = usePaymentStore((state) => state.payment);
+  const isPaymentConfirmed = payment?.isItemsFeeConfirmed === true;
+
+  console.log(`ACTIVE ORDER STATUS: ${JSON.stringify(activeOrder)}`);
   const heightRef = useRef(collapsedHeight);
 
   const pinnedLocation: Coordinates = {
@@ -208,6 +214,23 @@ const CustomerTrackingView = () => {
       setExpandedHeight(height * 0.6);
     }
   }, [activeOrder?.status]);
+
+  useEffect(() => {
+    if (!activeOrder) {
+      console.log(`ACTIVE ORDER IS NULL (DISABLE BUTTON EFFECT TRIGGER)`);
+      return;
+    }
+
+    const { payments } = usePaymentStore.getState();
+    setDisabledButton(
+      activeOrder?.status > 1 ||
+        (activeOrder?.status >= 1 &&
+          Date.parse(activeOrder.created_at) + 1 * 60 * 1000 < Date.now()) ||
+        payment?.isItemsFeeConfirmed === true
+    );
+
+    console.log(`DISABLE BUTTON: ${disabledButton}`);
+  }, [disabledButton]);
 
   useEffect(() => {
     heightRef.current = collapsedHeight;
@@ -348,6 +371,25 @@ const CustomerTrackingView = () => {
           // Show the OrderAccepted modal for 2 seconds
           setShowOrderAccepted(true);
           setTimeout(() => setShowOrderAccepted(false), 2000);
+        });
+
+        // Handler for payment proposal from courier
+        addHandler("PaymentProposalAccepted", (paymentData: any) => {
+          console.log("💰 PaymentProposal received:", paymentData);
+          usePaymentStore.getState().setPayment(paymentData);
+
+          setDisabledButton(true);
+        });
+
+        addHandler("PaymentProposalRejected", () => {
+          const fiveMinutesInMilliseconds = 5 * 60 * 1000;
+          const expiryTimestamp =
+            Date.parse(activeOrder.updated_at) + fiveMinutesInMilliseconds;
+          const isNotExpired = expiryTimestamp > Date.now();
+
+          if (isNotExpired) {
+            setDisabledButton(false);
+          } else setDisabledButton(true);
         });
 
         // Handler for order status updates (DELIVERED, CANCELLED, etc.)
@@ -539,7 +581,15 @@ const CustomerTrackingView = () => {
           setPendingReview(true);
           navigator.reset({
             index: 0,
-            routes: [{ name: "ReviewOrder" }],
+            routes: [
+              {
+                name: "ReviewOrder",
+                params: {
+                  orderId: activeOrder.orderIdPK,
+                  courierId: activeOrder.courierId,
+                },
+              },
+            ],
           });
         }}
       />
@@ -577,9 +627,11 @@ const CustomerTrackingView = () => {
         />
         <OrderCancelled
           visible={isCancelled}
-          onCancel={() => {
+          onCancel={async () => {
             setIsCancelled(false);
-            clearActiveOrder();
+            await updateOrderById(activeOrder.orderIdPK, Status.CANCELLED);
+            await clearActiveOrder();
+
             // Reset navigation stack and go to CustomerNavigationBar with Home tab active
             navigator.reset({
               index: 0,
@@ -768,17 +820,18 @@ const CustomerTrackingView = () => {
         }}
         {...panResponder.panHandlers}
       >
-        {/* Handle Bar */}
-        <View style={{ alignItems: "center", marginBottom: 12 }}>
-          <View
-            style={{
-              width: 40,
-              height: 5,
-              backgroundColor: "#ccc",
-              borderRadius: 3,
-            }}
-          />
-        </View>
+        {activeOrder?.status !== 0 && (
+          <View style={{ alignItems: "center", marginBottom: 12 }}>
+            <View
+              style={{
+                width: 40,
+                height: 5,
+                backgroundColor: "#ccc",
+                borderRadius: 3,
+              }}
+            />
+          </View>
+        )}
 
         {/* ====================================================== */}
         {/* 1. COLLAPSED + STATUS = 0 (Looking for Courier)        */}
@@ -889,11 +942,14 @@ const CustomerTrackingView = () => {
                   }}
                 >
                   <EditOrder height={64} width={64} />
-                  <CancelOrder
-                    height={64}
-                    width={64}
-                    onPress={() => setShowCancel(true)}
-                  />
+                  {/* Disable cancel if payment is confirmed */}
+                  <TouchableOpacity
+                    onPress={() => !isPaymentConfirmed && setShowCancel(true)}
+                    disabled={isPaymentConfirmed}
+                    style={{ opacity: isPaymentConfirmed ? 0.4 : 1 }}
+                  >
+                    <CancelOrder height={64} width={64} />
+                  </TouchableOpacity>
                 </View>
               </Animated.View>
             </View>
@@ -980,7 +1036,7 @@ const CustomerTrackingView = () => {
           </View>
         )}
 
-        {!expanded && activeOrder?.status === 1 && (
+        {!expanded && activeOrder?.status !== 0 && (
           <View>
             <View style={{ flexDirection: "column", gap: 10 }}>
               <View
@@ -1035,7 +1091,7 @@ const CustomerTrackingView = () => {
           </View>
         )}
 
-        {expanded && activeOrder?.status === 1 && (
+        {expanded && activeOrder?.status !== 0 && (
           <View style={{ marginTop: 15, gap: 20 }}>
             <View>
               <View style={{ flexDirection: "column", gap: 10 }}>
@@ -1171,7 +1227,7 @@ const CustomerTrackingView = () => {
                   }}
                 >
                   <Text style={{ fontWeight: "600" }}>
-                    {activeOrder?.paymentsResponseDTO?.itemsFee}
+                    {activeOrder?.paymentsResponseDTO?.deliveryFee}
                   </Text>
                 </View>
               </View>
@@ -1181,9 +1237,10 @@ const CustomerTrackingView = () => {
             </View>
             <View style={{ marginTop: 10, alignItems: "center" }}>
               <TouchableOpacity
-                onPress={() => setShowConfirm(true)}
+                onPress={() => setShowCancel(true)}
                 style={{
-                  backgroundColor: "#E53935",
+                  backgroundColor: !disabledButton ? "#E53935" : "#154D71",
+                  opacity: !disabledButton ? 1 : 0.5,
                   paddingVertical: 12,
                   paddingHorizontal: 24,
                   borderRadius: 8,
@@ -1191,6 +1248,7 @@ const CustomerTrackingView = () => {
                   justifyContent: "center",
                   width: "100%",
                 }}
+                disabled={disabledButton}
               >
                 <Text
                   style={{

@@ -13,6 +13,7 @@ import { convertCoordinatesToAddress } from "./geoapify";
 import * as SignalR from "@microsoft/signalr";
 import { useMessageRoomState } from "./store/message_room_store";
 import { useActiveOrderStore } from "./store/order_store";
+import { usePaymentStore } from "./store/payment_store";
 import { useOrdersHubStore } from "./store/orders_hub_store";
 import { useChatsHubStore } from "./store/chat_hub_store";
 import { getUserById } from "./user";
@@ -286,6 +287,7 @@ export const acceptOrderById = async (
     throw err;
   }
 };
+
 export const fetchOrderRealtime = async (
   onCreated: (order: OrderResponseDTO) => void
 ): Promise<void> => {
@@ -303,13 +305,15 @@ export const fetchOrderRealtime = async (
 };
 
 export const stopOrderRealtime = async () => {
-  const { disconnect } = useOrdersHubStore.getState();
+  const { removeHandler } = useOrdersHubStore.getState();
 
   try {
-    await disconnect();
-    console.log("OrdersHub SignalR connection stopped");
+    removeHandler("OrderCreated");
+    console.log(
+      "OrdersHub: Removed OrderCreated handler (connection kept alive)"
+    );
   } catch (err) {
-    console.error("Failed to stop OrdersHub connection:", err);
+    console.error("Failed to remove OrderCreated handler:", err);
   }
 };
 
@@ -360,62 +364,100 @@ export const getCurrentOrderAsCustomer =
     }
   };
 
-export const receiveOrderRealtime = async (): Promise<void> => {
-  const { initConnection, addHandler } = useOrdersHubStore.getState();
-
+// orders.service.ts or similar utility file
+const initializeOrdersHubConnection = async () => {
+  const { initConnection } = useOrdersHubStore.getState();
   const conn = await initConnection();
-
   console.log(
     "[HUB][CUSTOMER] Connected OrdersHub for realtime accepts/updates"
   );
+  return conn;
+};
 
-  addHandler("OrderAccepted", async (updatedOrder: OrderResponseDTO) => {
-    console.log("📬 OrderAccepted:", updatedOrder);
-    const { setShowOrderAccepted } = useActiveOrderStore.getState();
+const handleOrderAccepted = (updatedOrder: OrderResponseDTO) => {
+  console.log("📬 OrderAccepted:", updatedOrder);
+  const { setShowOrderAccepted } = useActiveOrderStore.getState();
 
-    useActiveOrderStore.setState({ activeOrder: updatedOrder });
+  useActiveOrderStore.setState({ activeOrder: updatedOrder });
 
-    // Show OrderAccepted modal for 2 seconds
-    setShowOrderAccepted(true);
-    setTimeout(() => setShowOrderAccepted(false), 2000);
+  // Show OrderAccepted modal for 2 seconds
+  setShowOrderAccepted(true);
+  setTimeout(() => setShowOrderAccepted(false), 2000);
 
-    useMessageRoomState.setState({
-      messageRoomParticipants: {
-        roomId: updatedOrder.chatRoomResponseDTO?.roomIdPK ?? null,
-        senderId: updatedOrder.courierId ?? null,
-        receiverId: updatedOrder.customerId ?? null,
-      },
-    });
+  // ... (Chat setup logic)
+  useMessageRoomState.setState({
+    messageRoomParticipants: {
+      roomId: updatedOrder.chatRoomResponseDTO?.roomIdPK ?? null,
+      senderId: updatedOrder.courierId ?? null,
+      receiverId: updatedOrder.customerId ?? null,
+    },
   });
+};
 
-  addHandler("OrderStatusUpdated", (updatedOrder: OrderResponseDTO) => {
-    console.log("♻️ OrderStatusUpdated:", updatedOrder);
-    const { setIsCancelled, setIsDelivered } = useActiveOrderStore.getState();
+const handleOrderStatusUpdated = (updatedOrder: OrderResponseDTO) => {
+  console.log("♻️ OrderStatusUpdated:", updatedOrder);
+  const { setIsCancelled, setIsDelivered, clearActiveOrder } =
+    useActiveOrderStore.getState();
 
-    if (updatedOrder.status === Status.CANCELLED) {
-      setIsCancelled(true);
-    }
-    if (updatedOrder.status === Status.DELIVERED) {
-      setIsDelivered(true);
-    }
+  if (updatedOrder.courierId === useAuthStore.getState().user?.userIdPK) {
+    console.log(`ROGINANDCOURIER: ${JSON.stringify(updatedOrder)}`);
+  }
 
-    if (
-      updatedOrder.status === Status.CANCELLED ||
-      updatedOrder.status === Status.DELIVERED
-    ) {
-      clearActiveOrder();
-      AsyncStorage.removeItem("message-cache-storage");
+  if (updatedOrder.status === Status.CANCELLED) {
+    setIsCancelled(true);
+  }
+  if (updatedOrder.status === Status.DELIVERED) {
+    setIsDelivered(true);
+  }
 
-      // Clear otherUser cache
-      useOtherUserStore.getState().clearOtherUser();
+  // ... (Cleanup logic)
+  if (
+    updatedOrder.status === Status.CANCELLED ||
+    updatedOrder.status === Status.DELIVERED
+  ) {
+    clearActiveOrder();
+    AsyncStorage.removeItem("message-cache-storage");
+    useOtherUserStore.getState().clearOtherUser();
+    Image.clearDiskCache();
+    Image.clearMemoryCache();
+    console.log("🗑️ Cleared message & image cache");
+  }
+  useActiveOrderStore.setState({ activeOrder: updatedOrder });
+};
 
-      // Clear expo-image cache
-      Image.clearDiskCache();
-      Image.clearMemoryCache();
-      console.log("🗑️ Cleared message & image cache");
-    }
-    useActiveOrderStore.setState({ activeOrder: updatedOrder });
+export const receiveOrderRealtime = async (): Promise<void> => {
+  const { addHandler, invokeHub } = useOrdersHubStore.getState();
+
+  await initializeOrdersHubConnection();
+
+  // If there's an active order, join the order group to receive updates
+  const { activeOrder } = useActiveOrderStore.getState();
+  if (activeOrder?.orderIdPK) {
+    console.log(
+      `[HUB] Joining order group for active order: ${activeOrder.orderIdPK}`
+    );
+    await invokeHub("JoinOrderGroup", activeOrder.orderIdPK);
+  }
+
+  // Subscribes to handlers
+  addHandler("OrderAccepted", handleOrderAccepted);
+  addHandler("OrderStatusUpdated", handleOrderStatusUpdated);
+
+  // Handler for payment proposal from courier
+  addHandler("PaymentProposal", (payment: any) => {
+    console.log(
+      `📥 Received PaymentProposal via real-time: ${JSON.stringify(payment)}`
+    );
+    usePaymentStore.getState().setPayment(payment);
   });
+};
+
+export const receiveOrderStatusRealtime = async (): Promise<void> => {
+  const { addHandler } = useOrdersHubStore.getState();
+  // Initializes connection or uses existing one
+  await initializeOrdersHubConnection();
+
+  addHandler("OrderStatusUpdated", handleOrderStatusUpdated);
 };
 
 export const updateOrderById = async (orderId: number, orderStatus: Status) => {
@@ -451,5 +493,33 @@ export const updateOrderById = async (orderId: number, orderStatus: Status) => {
       data: err?.response?.data,
     });
     throw err;
+  }
+};
+
+export const updateCourierLocation = async (
+  orderId: number,
+  latitude: number,
+  longitude: number
+): Promise<void> => {
+  try {
+    const { token } = useAuthStore.getState();
+
+    await axios.patch(
+      `${BASE_URL}/update/courier-location/${orderId}?courierLatitude=${latitude}&courierLongitude=${longitude}`,
+      {},
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    console.log(
+      `📍 [updateCourierLocation] Sent: Order ${orderId}, Lat: ${latitude}, Lng: ${longitude}`
+    );
+  } catch (err: any) {
+    // Don't throw - location updates are non-critical
+    console.warn("⚠️ [updateCourierLocation] Failed:", err?.message);
   }
 };
