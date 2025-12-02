@@ -38,7 +38,7 @@ export const useOtherUser = (): UserResponseDTO | null => {
     };
 
     load();
-  }, [user, activeOrder?.orderIdPK]); // Only re-run when order changes
+  }, [activeOrder]); 
 
   return otherUser;
 };

@@ -5,11 +5,14 @@ import { PaymentsResponseDTO } from "./payment.response.dto";
 export enum Status {
   PENDING = 0,
   ACCEPTED = 1,
-  IN_TRANSIT = 2,
-  DELIVERED = 3,
-  WATING_FOR_REVIEW = 4,
-  REVIEWED = 5,
-  CANCELLED = 6,
+  PICKED_UP = 2,
+
+  IN_TRANSIT = 3,
+  DELIVERED = 4,
+  WATING_FOR_REVIEW = 5,
+  REVIEWED = 6,
+
+  CANCELLED = 7,
 }
 
 export enum Priority {

@@ -8,21 +8,27 @@ import { Status } from "@/app/api/dto/response/order.response.dto";
 import { useOtherUserStore } from "@/app/api/store/user_store";
 import { Ionicons } from "@expo/vector-icons";
 
-const STATUS_LABELS = ["Pending", "Accepted", "Picked up", "In transit"];
+// Clearer stage labels for the order flow
+const STATUS_LABELS = [
+  "Finding Courier",
+  "Courier Assigned",
+  "Picking Up",
+  "On The Way",
+];
 
 // Map order status to progress step (0-3)
 const getProgressStep = (status: Status): number => {
   switch (status) {
     case Status.PENDING:
-      return 0;
+      return 0; // Finding Courier
     case Status.ACCEPTED:
-      return 1;
+      return 1; // Courier Assigned
     case Status.IN_TRANSIT:
-      return 2;
+      return 2; // Picking Up / On The Way
     case Status.DELIVERED:
     case Status.WATING_FOR_REVIEW:
     case Status.REVIEWED:
-      return 3;
+      return 3; // Completed
     default:
       return 0;
   }

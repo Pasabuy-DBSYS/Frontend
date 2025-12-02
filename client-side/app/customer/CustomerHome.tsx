@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -14,22 +14,27 @@ import { useNavigation } from "@react-navigation/native";
 import { useAuthStore } from "../api/store/auth_store";
 import { changeRole } from "../api/user";
 import { useActiveOrderStore } from "../api/store/order_store";
+import { useOrdersHubStore } from "../api/store/orders_hub_store";
 import { Status } from "../api/dto/response/order.response.dto";
 import { LinearGradient } from "expo-linear-gradient";
+import { Role } from "@/types/types";
 
 const screenWidth = Dimensions.get("window").width;
 
-const Home = () => {
+interface HomeProps {
+  setActiveTab?: (tab: number) => void;
+}
+
+const Home = ({ setActiveTab }: HomeProps) => {
   const [toggleModal, setToggleModal] = useState<boolean>(false);
+
+  const [isHydrationComplete, setIsHydrationComplete] =
+    useState<boolean>(false);
   const navigator = useNavigation();
   const { user } = useAuthStore();
   const { activeOrder } = useActiveOrderStore();
 
-  const hasActiveOrder =
-    activeOrder &&
-    activeOrder.status !== Status.CANCELLED &&
-    activeOrder.status !== Status.DELIVERED &&
-    activeOrder.status !== Status.REVIEWED;
+  const hasActiveOrder = activeOrder !== null;
 
   const switchRole = () => {
     if (hasActiveOrder) {
@@ -38,16 +43,64 @@ const Home = () => {
     setToggleModal(true);
   };
 
+  console.log(`HAS ACTIVE ORDER: ${hasActiveOrder}`);
+  // ... other imports
+
+  const isDisabled = !isHydrationComplete || hasActiveOrder;
+
   const switchRolePersist = async () => {
     try {
-      console.log(`OLD TOKEN: ${useAuthStore.getState().token}`);
-      const { newToken } = await changeRole();
-      await useAuthStore.getState().refreshToken(newToken);
-      console.log(`NEW TOKEN: ${newToken}`);
+      // 1. Change role on server & update token (token is updated inside changeRole)
+      const { newToken, user } = await changeRole();
+
+      // 2. If we got a new token, ensure it's set
+      if (newToken && typeof newToken === "string") {
+        await useAuthStore.getState().refreshToken(newToken);
+      }
+
+      // Get the new role from the updated user
+      const newRole =
+        user?.currentRole ?? useAuthStore.getState().user?.currentRole;
+
+      const { disconnect, initConnection, invokeHub } =
+        useOrdersHubStore.getState();
+
+      // 3. Disconnect existing hub connection
+      await disconnect();
+
+      // 4. Initialize a new connection with the new token/role
+      await initConnection();
+
+      // 5. Join the correct group based on the new role
+      if (newRole === Role.COURIER) {
+        await invokeHub("JoinCourierGroup");
+        console.log("[SWITCH] Joined CourierGroup");
+      } else if (newRole === Role.CUSTOMER) {
+        await invokeHub("JoinCustomerGroup");
+        console.log("[SWITCH] Joined CustomerGroup");
+      }
+
+      // 6. Rehydrate active order for the NEW role
+      await useActiveOrderStore.getState().rehydrateActiveOrder();
     } catch (error) {
-      console.error("Error changing role:", error);
+      console.error("Error changing role and resetting connection:", error);
     }
   };
+
+  useEffect(() => {
+    const checkActiveOrder = async () => {
+      const { rehydrateActiveOrder } = useActiveOrderStore.getState();
+      try {
+        await rehydrateActiveOrder(); // Waits for the API call/state update
+      } catch (error) {
+        console.error("Initial order check failed:", error);
+        // Even on failure, we proceed, but the store state should be cleared (null)
+      } finally {
+        setIsHydrationComplete(true); // Signal that the app is ready for user interaction
+      }
+    };
+    checkActiveOrder();
+  }, []);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -158,15 +211,15 @@ const Home = () => {
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    backgroundColor: hasActiveOrder ? "#ccc" : "#545EE1",
+                    backgroundColor: isDisabled ? "#ccc" : "#545EE1",
                     paddingVertical: 10,
                     paddingHorizontal: 16,
                     borderRadius: 12,
                     gap: 8,
-                    opacity: hasActiveOrder ? 0.6 : 1,
+                    opacity: isDisabled ? 0.6 : 1,
                   }}
                   onPress={switchRole}
-                  disabled={!!hasActiveOrder}
+                  disabled={isDisabled}
                 >
                   <SwitchIcon />
                   <Text style={{ color: "white", fontWeight: "600" }}>
@@ -178,7 +231,7 @@ const Home = () => {
           </View>
 
           {/* Active Order Banner */}
-          {hasActiveOrder && (
+          {activeOrder && (
             <View style={{ paddingHorizontal: 24, marginTop: 24 }}>
               <TouchableOpacity
                 style={{
@@ -259,7 +312,7 @@ const Home = () => {
                   shadowRadius: 10,
                   elevation: 5,
                 }}
-                onPress={() => navigator.navigate("Orders" as never)}
+                onPress={() => setActiveTab?.(0)}
               >
                 <View
                   style={{
@@ -303,7 +356,7 @@ const Home = () => {
                   shadowRadius: 10,
                   elevation: 5,
                 }}
-                onPress={() => navigator.navigate("OrderHistory" as never)}
+                onPress={() => setActiveTab?.(3)}
               >
                 <View
                   style={{

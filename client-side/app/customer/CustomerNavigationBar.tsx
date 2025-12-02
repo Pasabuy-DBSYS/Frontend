@@ -1,7 +1,7 @@
 import Home from "@/app/customer/CustomerHome";
 import Orders from "@/app/customer/Orders";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import React, { useState, useRef, useEffect, act } from "react";
+import React, { useState, useRef, useEffect, act, use } from "react";
 import {
   View,
   Text,
@@ -28,7 +28,7 @@ const CustomerNavigationBar = () => {
   const { width } = Dimensions.get("window");
   const route = useRoute<any>();
   const navPage = route.params?.navPage;
-  const { disconnect } = useOrdersHubStore();
+  const { disconnect, isReady } = useOrdersHubStore();
 
   const navItems = [
     { icon: <CartIcon />, name: "Cart" },
@@ -43,25 +43,15 @@ const CustomerNavigationBar = () => {
 
     const initRealtime = async () => {
       try {
-        // Restore messageRoomParticipants from persisted activeOrder if present
-        const { activeOrder } = useActiveOrderStore.getState();
-        if (activeOrder?.chatRoomResponseDTO?.roomIdPK) {
-          console.log(
-            `[CUSTOMER] Restoring messageRoomParticipants from persisted activeOrder: roomId=${activeOrder.chatRoomResponseDTO.roomIdPK}`
-          );
-          useMessageRoomState.setState({
-            messageRoomParticipants: {
-              roomId: activeOrder.chatRoomResponseDTO.roomIdPK,
-              senderId: activeOrder.courierId ?? null,
-              receiverId: activeOrder.customerId ?? null,
-            },
-          });
-        }
+        // Restore messageRoomParticipants from persisted activeOrder
+        const { rehydrateMessageRoom } = useMessageRoomState.getState();
+        rehydrateMessageRoom();
 
+        // Only setup handlers - connection is already established in App.tsx
         await receiveOrderRealtime();
-        console.log("✅ Connected to OrdersHub for real-time updates");
+        console.log("✅ OrdersHub handlers registered for real-time updates");
       } catch (err) {
-        console.error("❌ Failed to connect to OrdersHub:", err);
+        console.error("❌ Failed to setup OrdersHub handlers:", err);
       }
     };
 
@@ -69,8 +59,8 @@ const CustomerNavigationBar = () => {
 
     return () => {
       if (isMounted) {
-        disconnect(); // safely stop connection when user leaves customer side
-        console.log("🛑 Disconnected from OrdersHub");
+        // Don't disconnect here - let App.tsx manage the connection lifecycle
+        console.log("🔄 CustomerNavigationBar unmounting");
         isMounted = false;
       }
     };
@@ -120,7 +110,7 @@ const CustomerNavigationBar = () => {
           backgroundColor: "white",
         }}
       >
-        {activeTab === 2 && <Home />}
+        {activeTab === 2 && <Home setActiveTab={setActiveTab} />}
         {activeTab === 0 && <Orders />}
         {activeTab === 3 && <OrderHistory />}
         {activeTab === 4 && <Profile />}

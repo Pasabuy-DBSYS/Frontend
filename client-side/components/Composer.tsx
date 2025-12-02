@@ -9,6 +9,8 @@ import {
 } from "react-native";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import ReceiptUploadModal from "./modals/ReceiptUpload";
+import { useAuthStore } from "@/app/api/store/auth_store";
+import Camera from "./svg/Camera";
 
 type ComposerProps = {
   value: string;
@@ -33,6 +35,7 @@ export default function Composer({
   const [showMediaMenu, setShowMediaMenu] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const disabled = value.trim().length === 0;
+  const { user } = useAuthStore();
 
   const handleCamera = () => {
     setShowMediaMenu(false);
@@ -76,7 +79,14 @@ export default function Composer({
 
       {/* Plus Button */}
       <TouchableOpacity
-        onPress={() => setShowMediaMenu(true)}
+        onPress={() => {
+          if (user?.currentRole === 1) {
+            setShowMediaMenu(true);
+          }
+          if (user?.currentRole === 0) {
+            handleCamera();
+          }
+        }}
         style={{
           width: 48,
           height: 48,
@@ -88,91 +98,99 @@ export default function Composer({
           borderColor: "#E2E2E2",
         }}
       >
-        <Ionicons name="add" size={26} color="#5C5CE6" />
+        {user?.currentRole === 1 && (
+          <Ionicons name="add" size={26} color="#5C5CE6" />
+        )}
+        {user?.currentRole === 0 && (
+          <Camera name="plus" size={26} color="#5C5CE6" />
+        )}
       </TouchableOpacity>
 
       {/* Media Menu Modal */}
-      <Modal
-        visible={showMediaMenu}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => setShowMediaMenu(false)}
-      >
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.3)",
-            justifyContent: "flex-end",
-          }}
-          onPress={() => setShowMediaMenu(false)}
+
+      {user?.currentRole === 1 && (
+        <Modal
+          visible={showMediaMenu}
+          transparent={true}
+          animationType="none"
+          onRequestClose={() => setShowMediaMenu(false)}
         >
           <Pressable
             style={{
-              backgroundColor: "#fff",
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              paddingVertical: 20,
-              paddingHorizontal: 24,
-              paddingBottom: 40,
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.3)",
+              justifyContent: "flex-end",
             }}
-            onPress={(e) => e.stopPropagation()}
+            onPress={() => setShowMediaMenu(false)}
           >
-            {/* Camera Option */}
-            <TouchableOpacity
-              onPress={handleCamera}
+            <Pressable
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: "#f0f0f0",
+                backgroundColor: "#fff",
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                paddingVertical: 20,
+                paddingHorizontal: 24,
+                paddingBottom: 40,
               }}
+              onPress={(e) => e.stopPropagation()}
             >
-              <View
+              {/* Camera Option */}
+              <TouchableOpacity
+                onPress={handleCamera}
                 style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: "#545EE1",
-                  justifyContent: "center",
+                  flexDirection: "row",
                   alignItems: "center",
-                  marginRight: 16,
+                  paddingVertical: 16,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#f0f0f0",
                 }}
               >
-                <Feather name="camera" size={22} color="#fff" />
-              </View>
-              <Text style={{ fontSize: 16, color: "#1C1C1C" }}>Camera</Text>
-            </TouchableOpacity>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: "#545EE1",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginRight: 16,
+                  }}
+                >
+                  <Feather name="camera" size={22} color="#fff" />
+                </View>
+                <Text style={{ fontSize: 16, color: "#1C1C1C" }}>Camera</Text>
+              </TouchableOpacity>
 
-            {/* Attach/Upload Photo Option */}
-            <TouchableOpacity
-              onPress={handleAttachReceipt}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 16,
-              }}
-            >
-              <View
+              {/* Attach/Upload Photo Option */}
+              <TouchableOpacity
+                onPress={handleAttachReceipt}
                 style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: "#545EE1",
-                  justifyContent: "center",
+                  flexDirection: "row",
                   alignItems: "center",
-                  marginRight: 16,
+                  paddingVertical: 16,
                 }}
               >
-                <Ionicons name="receipt-outline" size={22} color="#fff" />
-              </View>
-              <Text style={{ fontSize: 16, color: "#1C1C1C" }}>
-                Attach Receipt
-              </Text>
-            </TouchableOpacity>
+                <View
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: "#545EE1",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginRight: 16,
+                  }}
+                >
+                  <Ionicons name="receipt-outline" size={22} color="#fff" />
+                </View>
+                <Text style={{ fontSize: 16, color: "#1C1C1C" }}>
+                  Attach Receipt
+                </Text>
+              </TouchableOpacity>
+            </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </Modal>
+      )}
 
       <View
         style={{

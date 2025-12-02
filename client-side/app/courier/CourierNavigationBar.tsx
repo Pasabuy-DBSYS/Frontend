@@ -24,13 +24,16 @@ import MessagePage from "@/components/MessagePage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useOrdersHubStore } from "../api/store/orders_hub_store";
 import Notifications from "@/components/Notifications";
+import { receiveOrderStatusRealtime } from "../api/orders";
+import { useActiveOrderStore } from "../api/store/order_store";
+import { useMessageRoomState } from "../api/store/message_room_store";
 
 const CourierNavigationBar = () => {
   const [activeTab, setActiveTab] = useState(2);
   const { width } = Dimensions.get("window");
   const route = useRoute<any>();
   const navPage = route.params?.navPage;
-  const { initConnection } = useOrdersHubStore();
+  const { disconnect, isReady } = useOrdersHubStore();
   const activeTabReceived = route.params?.activeTab;
 
   const navItems = [
@@ -41,17 +44,27 @@ const CourierNavigationBar = () => {
     { icon: <ProfileIcon />, name: "Profile" },
   ];
 
+  // SignalR connection is already initialized in App.tsx
+  // Just log the connection status here
   useEffect(() => {
-    const initRealtime = async () => {
-      try {
-        await initConnection();
-        console.log("✅ Connected to OrdersHub for real-time updates");
-      } catch (err) {
-        console.error("❌ Failed to connect to OrdersHub:", err);
-      }
-    };
+    console.log(`📡 CourierNavigationBar mounted, SignalR ready: ${isReady}`);
 
-    initRealtime();
+    // Restore messageRoomParticipants from persisted activeOrder
+    const { rehydrateMessageRoom } = useMessageRoomState.getState();
+    rehydrateMessageRoom();
+
+    return () => {
+      // Don't disconnect here - let App.tsx manage the connection lifecycle
+      console.log("🔄 CourierNavigationBar unmounting");
+    };
+  }, [isReady]);
+
+  const receiveOrderStatus = async () => {
+    await receiveOrderStatusRealtime();
+  };
+
+  useEffect(() => {
+    receiveOrderStatus();
   }, []);
   // Scale animation (no lift)
   const scaleAnims = useRef(
@@ -99,7 +112,7 @@ const CourierNavigationBar = () => {
           backgroundColor: "white",
         }}
       >
-        {activeTab === 2 && <CourierHome />}
+        {activeTab === 2 && <CourierHome setActiveTab={setActiveTab} />}
         {(activeTab === 0 || navPage) && <OrderList />}
         {activeTab === 3 && <OrderHistory />}
         {activeTab === 4 && <Profile />}

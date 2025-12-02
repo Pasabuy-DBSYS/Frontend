@@ -27,6 +27,7 @@ import CustomerTrackingView from "./app/customer/CustomerTrackingView";
 import ReviewOrder from "./components/ReviewOrder";
 import { useRouteStore } from "./app/api/store/route_store";
 import { useOrdersHubStore } from "./app/api/store/orders_hub_store";
+import { useNotificationHubStore } from "./app/api/store/notification_hub_store";
 import { useActiveOrderStore } from "./app/api/store/order_store";
 import Home from "./app/customer/CustomerHome";
 import Settings from "./components/Settings";
@@ -41,9 +42,14 @@ export default function App() {
       try {
         const { initConnection, invokeHub, disconnect } =
           useOrdersHubStore.getState();
+        const { initConnection: initNotificationHub, joinUserGroup } =
+          useNotificationHubStore.getState();
         const { rehydrateActiveOrder } = useActiveOrderStore.getState();
         const hasVisited = await AsyncStorage.getItem("hasVisited");
 
+        
+        await AsyncStorage.removeItem("active-order-storage");
+        await AsyncStorage.removeItem("message-room-participants");
         // 🔹 First-time launch or after clear cache
         if (!hasVisited) {
           await AsyncStorage.setItem("hasVisited", "true");
@@ -58,6 +64,7 @@ export default function App() {
           await AsyncStorage.removeItem("active-order-storage");
           await AsyncStorage.removeItem("message-room-participants");
           await disconnect();
+          // NotificationHub stays connected - never disconnect
           return;
         }
 
@@ -69,7 +76,19 @@ export default function App() {
         await rehydrateActiveOrder();
         console.log("[rehydrate] Active order synced from server");
 
-        await initConnection();
+        // Initialize SignalR connections
+        const conn = await initConnection();
+        if (!conn) {
+          console.warn("Failed to init SignalR, routing to Welcome");
+          setInitialRoute("Welcome");
+          return;
+        }
+
+        // Initialize NotificationHub and join user group
+        const notifConn = await initNotificationHub();
+        if (notifConn && updatedUser) {
+          await joinUserGroup(updatedUser.userIdPK);
+        }
 
         if (updatedUser?.currentRole === Role.COURIER) {
           setInitialRoute("CourierNavigationBar");

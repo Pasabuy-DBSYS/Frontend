@@ -10,8 +10,18 @@ import {
 import AuthLeftButton from "./svg/AuthLeftButton";
 import { useNavigation } from "@react-navigation/native";
 import { useActiveOrderStore } from "@/app/api/store/order_store";
-import { useOtherUser } from "@/app/api/hook/useOtherUser";
 import { Image } from "expo-image";
+import { postReview } from "@/app/api/reviews";
+import { PostReviewRequestDTO } from "@/app/api/dto/request/review.request.dto";
+import { useRoute } from "@react-navigation/native";
+import { getUserById } from "@/app/api/user";
+import {
+  Roles,
+  UserResponseDTO,
+} from "@/app/api/dto/response/auth.response.dto";
+import { useEffect } from "react";
+import { useAuthStore } from "@/app/api/store/auth_store";
+import { getOrderById } from "@/app/api/orders";
 const { width } = Dimensions.get("window");
 
 const RATING_LABELS = [
@@ -25,29 +35,106 @@ const RATING_LABELS = [
 
 const ReviewOrder = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute();
+  const { orderId, courierId } = (route.params as {
+    orderId: number;
+    courierId: number;
+  }) || { orderId: 0, courierId: 0 };
+
   const [rating, setRating] = useState(4);
   const [feedback, setFeedback] = useState("");
-  const otherUser = useOtherUser();
+  const [courier, setCourier] = useState<UserResponseDTO | null>(null);
   const { clearActiveOrder, setPendingReview } = useActiveOrderStore();
+  const { user } = useAuthStore();
+
+  const roleMap = {
+    [Roles.Customer]: "CustomerNavigationBar",
+    [Roles.Courier]: "CourierNavigationBar",
+  };
+
+  useEffect(() => {
+    const fetchCourier = async () => {
+      if (courierId) {
+        try {
+          const data = await getUserById(courierId);
+          setCourier(data);
+        } catch (err) {
+          console.error("Failed to fetch courier info:", err);
+        }
+      }
+    };
+    fetchCourier();
+  }, [courierId]);
 
   // Default courier data
-  const courierName = otherUser?.firstName
-    ? `${otherUser.firstName} ${otherUser.lastName || ""}`.trim()
+  const courierName = courier?.firstName
+    ? `${courier.firstName} ${courier.lastName || ""}`.trim()
     : "Your Courier";
 
-  const handleSubmit = () => {
-    // TODO: Submit review to API
-    console.log("Review submitted:", { rating, feedback });
+  const handleSubmit = async () => {
+    if (!orderId || !courierId) {
+      console.error("Missing order ID or courier ID");
+      return;
+    }
 
-    // Clear the active order and pending review flag
-    clearActiveOrder();
-    setPendingReview(false);
+    const order = await getOrderById(orderId);
 
-    // Navigate to home (CustomerNavigationBar)
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "CustomerNavigationBar" }],
-    });
+    let reviewedUserID = 0;
+
+    try {
+      if (!user) {
+        console.error("User not logged in");
+        return;
+      }
+
+      if (!order) {
+        console.error("Order not found");
+        return;
+      }
+
+      // Handle both potential enum values for Customer (0 or 2) to be safe
+      // Roles.Customer is 2, but types.Role.CUSTOMER is 0
+      const currentRole = user.currentRole as unknown as number;
+
+      if (currentRole === Roles.Customer || currentRole === 0) {
+        reviewedUserID = order.courierId;
+      } else if (currentRole === Roles.Courier || currentRole === 1) {
+        reviewedUserID = order.customerId;
+      }
+
+      const reviewData: PostReviewRequestDTO = {
+        orderIDFK: orderId,
+        reviewedUserID,
+        rating: rating,
+        comment: feedback,
+      };
+
+      console.log("Review Data: ", reviewData);
+
+      await postReview(reviewData);
+      console.log("Review submitted successfully");
+
+      // Clear the active order and pending review flag
+      clearActiveOrder();
+      setPendingReview(false);
+      let homeRole = "";
+
+      if (currentRole === Roles.Customer || currentRole === 0) {
+        homeRole = "CustomerNavigationBar";
+      }
+      if (currentRole === Roles.Courier || currentRole === 1) {
+        homeRole = "CourierNavigationBar";
+      }
+
+      // Navigate to home (CustomerNavigationBar)
+      navigation.reset({
+        index: 0,
+        routes: [{ name: homeRole }],
+      });
+    } catch (error) {
+      console.error("Failed to submit review:", error);
+      // Optionally show an alert to the user
+    }
   };
 
   const handleBack = () => {
@@ -58,7 +145,7 @@ const ReviewOrder = () => {
     // Navigate to home
     navigation.reset({
       index: 0,
-      routes: [{ name: "CustomerNavigationBar" }],
+      routes: [{ name: roleMap[user.currentRole] }],
     });
   };
 
@@ -140,13 +227,14 @@ const ReviewOrder = () => {
               width: 80,
               height: 80,
               justifyContent: "center",
+              borderRadius: 40,
               alignItems: "center",
               overflow: "hidden",
             }}
           >
             <Image
               source={{
-                uri: `https://pasabuyres.s3.ap-southeast-2.amazonaws.com/${otherUser?.profilePictureKey}`,
+                uri: `https://pasabuyres.s3.ap-southeast-2.amazonaws.com/${courier?.profilePictureKey}`,
               }}
               cachePolicy={"memory-disk"}
               style={{ width: 80, height: 80 }}

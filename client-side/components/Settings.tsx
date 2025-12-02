@@ -86,8 +86,7 @@ const Settings = () => {
       <UpdatePhoneNumber
         visible={updatePhoneNumber}
         onClose={() => setUpdatePhoneNumber(false)}
-        onChangePress={() => setUpdatePhoneNumber(false)}
-        phoneNumber={user?.phone ?? ""}
+        onSave={() => setUpdatePhoneNumber(false)}
       />
       <UpdateDisplayName
         visible={updateDisplayName}
