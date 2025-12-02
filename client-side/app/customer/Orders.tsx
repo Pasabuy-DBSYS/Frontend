@@ -155,6 +155,30 @@ const Orders: React.FC = () => {
       console.log("DEVICE ADDRESS YAWA: ", deviceAddress);
 
       if (!convertedAddress) throw new Error("Address conversion failed.");
+
+      // Validate coordinates before creating order
+      if (
+        !commissionData.coordinates?.latitude ||
+        !commissionData.coordinates?.longitude ||
+        commissionData.coordinates.latitude === 0 ||
+        commissionData.coordinates.longitude === 0
+      ) {
+        throw new Error(
+          "Invalid pickup location coordinates. Please select a valid location."
+        );
+      }
+
+      if (
+        !deviceLocation?.latitude ||
+        !deviceLocation?.longitude ||
+        deviceLocation.latitude === 0 ||
+        deviceLocation.longitude === 0
+      ) {
+        throw new Error(
+          "Invalid delivery location coordinates. Please ensure GPS is enabled and location is available."
+        );
+      }
+
       const dto: PostOrderRequestDTO = {
         customerId: user.userIdPK,
         request: commissionData.specification,
@@ -163,8 +187,8 @@ const Orders: React.FC = () => {
         priority: isUrgent ? 1 : 0,
         locationLatitude: commissionData.coordinates.latitude,
         locationLongitude: commissionData.coordinates.longitude,
-        customerLatitude: deviceLocation?.latitude || 0,
-        customerLongitude: deviceLocation?.longitude || 0,
+        customerLatitude: deviceLocation.latitude,
+        customerLongitude: deviceLocation.longitude,
         customerAddress: deviceAddress as string,
         destinationAddress: commissionData.address,
         deliveryDistance: coordinates.length || 0,
