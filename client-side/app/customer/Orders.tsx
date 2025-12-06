@@ -37,6 +37,8 @@ import { useLocationStore } from "../api/store/location_store";
 import ConfirmOrder from "@/components/modals/ConfirmOrder";
 import { useActiveOrderStore } from "../api/store/order_store";
 import { Button } from "@/components/Button";
+// Import responsive utilities
+import { fp, sp, br, iconSize, hp } from "@/constants/responsive";
 
 const URGENT_FEE = 20; // Additional fee for urgent orders
 const BASE_FEE = 10; // Base delivery fee
@@ -135,31 +137,15 @@ const Orders: React.FC = () => {
       }
 
       if (
-        !commissionData.coordinates ||
-        !commissionData.coordinates.latitude ||
-        !commissionData.coordinates.longitude
+        !commissionData.coordinates?.latitude ||
+        !commissionData.coordinates?.longitude
       ) {
         Alert.alert("Error", "Please select a valid delivery location.");
         return;
       }
 
-      const convertedAddress = await convertCoordinatesToAddress(
-        commissionData.coordinates,
-        GEOAPIFY_KEY
-      );
-      const deviceAddress = await convertCoordinatesToAddress(
-        deviceLocation as Coordinates,
-        GEOAPIFY_KEY
-      );
-
-      console.log("DEVICE ADDRESS YAWA: ", deviceAddress);
-
-      if (!convertedAddress) throw new Error("Address conversion failed.");
-
       // Validate coordinates before creating order
       if (
-        !commissionData.coordinates?.latitude ||
-        !commissionData.coordinates?.longitude ||
         commissionData.coordinates.latitude === 0 ||
         commissionData.coordinates.longitude === 0
       ) {
@@ -178,6 +164,19 @@ const Orders: React.FC = () => {
           "Invalid delivery location coordinates. Please ensure GPS is enabled and location is available."
         );
       }
+
+      const convertedAddress = await convertCoordinatesToAddress(
+        commissionData.coordinates,
+        GEOAPIFY_KEY
+      );
+      const deviceAddress = await convertCoordinatesToAddress(
+        deviceLocation as Coordinates,
+        GEOAPIFY_KEY
+      );
+
+      console.log("DEVICE ADDRESS YAWA: ", deviceAddress);
+
+      if (!convertedAddress) throw new Error("Address conversion failed.");
 
       const dto: PostOrderRequestDTO = {
         customerId: user.userIdPK,
@@ -409,55 +408,56 @@ const Orders: React.FC = () => {
         >
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: 120 }}
+            contentContainerStyle={{ paddingBottom: sp(120) }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
             {/* Header */}
             <View
               style={{
-                paddingHorizontal: 20,
-                paddingTop: Platform.OS === "android" ? 50 : 60,
+                paddingHorizontal: sp(20),
+                paddingTop: Platform.OS === "android" ? sp(50) : sp(60),
               }}
             >
               <Text
-                style={{ fontSize: 28, fontWeight: "bold", color: "white" }}
+                style={{ fontSize: fp(28), fontWeight: "bold", color: "white" }}
               >
                 Commission
               </Text>
             </View>
 
             {/* Location Cards */}
-            <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
+            <View style={{ paddingHorizontal: sp(20), marginTop: sp(20) }}>
               {/* Pick-up Location Card */}
               <TouchableOpacity
                 style={{
                   backgroundColor: "rgba(255,255,255,0.95)",
-                  borderRadius: 16,
-                  padding: 16,
-                  marginBottom: 12,
+                  borderRadius: br(16),
+                  padding: sp(16),
+                  marginBottom: sp(12),
                   flexDirection: "row",
                   alignItems: "center",
+                  height: hp(8),
                 }}
                 disabled
               >
                 <View
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    borderWidth: 3,
+                    width: iconSize(32),
+                    height: iconSize(32),
+                    borderRadius: br(16),
+                    borderWidth: sp(3),
                     borderColor: "#545EE1",
                     justifyContent: "center",
                     alignItems: "center",
-                    marginRight: 12,
+                    marginRight: sp(12),
                   }}
                 >
                   <View
                     style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: 4,
+                      width: iconSize(8),
+                      height: iconSize(8),
+                      borderRadius: br(4),
                       backgroundColor: "#545EE1",
                     }}
                   />
@@ -465,7 +465,7 @@ const Orders: React.FC = () => {
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
-                      fontSize: 12,
+                      fontSize: fp(12),
                       color: "#545EE1",
                       fontWeight: "600",
                     }}
@@ -474,10 +474,10 @@ const Orders: React.FC = () => {
                   </Text>
                   <Text
                     style={{
-                      fontSize: 15,
+                      fontSize: fp(15),
                       color: "#333",
                       fontWeight: "500",
-                      marginTop: 2,
+                      marginTop: sp(2),
                     }}
                     numberOfLines={1}
                   >
@@ -492,8 +492,8 @@ const Orders: React.FC = () => {
               <TouchableOpacity
                 style={{
                   backgroundColor: "rgba(255,255,255,0.95)",
-                  borderRadius: 16,
-                  padding: 16,
+                  borderRadius: br(16),
+                  padding: sp(16),
                   flexDirection: "row",
                   alignItems: "center",
                 }}
@@ -507,21 +507,21 @@ const Orders: React.FC = () => {
               >
                 <View
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
+                    width: iconSize(32),
+                    height: iconSize(32),
+                    borderRadius: br(16),
                     backgroundColor: "#545EE1",
                     justifyContent: "center",
                     alignItems: "center",
-                    marginRight: 12,
+                    marginRight: sp(12),
                   }}
                 >
-                  <Ionicons name="location" size={18} color="white" />
+                  <Ionicons name="location" size={iconSize(18)} color="white" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
-                      fontSize: 12,
+                      fontSize: fp(12),
                       color: "#545EE1",
                       fontWeight: "600",
                     }}
@@ -530,20 +530,30 @@ const Orders: React.FC = () => {
                   </Text>
                   <Text
                     style={{
-                      fontSize: 15,
+                      fontSize: fp(15),
                       color: commissionData.address ? "#333" : "#999",
                       fontWeight: "500",
-                      marginTop: 2,
+                      marginTop: sp(2),
                     }}
                     numberOfLines={1}
                   >
                     {commissionData.address || "Where to deliver?"}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#999" />
+                <Ionicons
+                  name="chevron-forward"
+                  size={iconSize(20)}
+                  color="#999"
+                />
               </TouchableOpacity>
               {addressError ? (
-                <Text style={{ color: "#DC143C", fontSize: 12, marginTop: 5 }}>
+                <Text
+                  style={{
+                    color: "#DC143C",
+                    fontSize: fp(12),
+                    marginTop: sp(5),
+                  }}
+                >
                   {addressError}
                 </Text>
               ) : null}
@@ -551,12 +561,12 @@ const Orders: React.FC = () => {
 
             {/* Search Results */}
             {searchResults.length > 0 && (
-              <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
+              <View style={{ paddingHorizontal: sp(20), marginTop: sp(8) }}>
                 <View
                   style={{
                     backgroundColor: "white",
-                    borderRadius: 12,
-                    maxHeight: 160,
+                    borderRadius: br(12),
+                    maxHeight: hp(20),
                     overflow: "hidden",
                   }}
                 >
@@ -589,9 +599,9 @@ const Orders: React.FC = () => {
                             navigation.navigate("LocationPicker");
                           }}
                           style={{
-                            paddingVertical: 12,
-                            paddingHorizontal: 14,
-                            borderBottomWidth: 0.5,
+                            paddingVertical: sp(12),
+                            paddingHorizontal: sp(14),
+                            borderBottomWidth: sp(0.5),
                             borderColor: "#eee",
                           }}
                         >
@@ -599,7 +609,7 @@ const Orders: React.FC = () => {
                             style={{
                               color: "#333",
                               fontWeight: "600",
-                              fontSize: 14,
+                              fontSize: fp(14),
                             }}
                           >
                             {item.properties.formatted}
@@ -608,8 +618,8 @@ const Orders: React.FC = () => {
                             <Text
                               style={{
                                 color: "#888",
-                                fontSize: 12,
-                                marginTop: 2,
+                                fontSize: fp(12),
+                                marginTop: sp(2),
                               }}
                             >
                               {distanceLabel}
@@ -624,28 +634,32 @@ const Orders: React.FC = () => {
             )}
 
             {/* Details Section */}
-            <View style={{ paddingHorizontal: 20, marginTop: 20 }}>
+            <View style={{ paddingHorizontal: sp(20), marginTop: sp(20) }}>
               <View
                 style={{
                   backgroundColor: "rgba(255,255,255,0.95)",
-                  borderRadius: 16,
-                  padding: 16,
+                  borderRadius: br(16),
+                  padding: sp(16),
                 }}
               >
                 <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    marginBottom: 16,
+                    marginBottom: sp(16),
                   }}
                 >
-                  <Ionicons name="options" size={20} color="#545EE1" />
+                  <Ionicons
+                    name="options"
+                    size={iconSize(20)}
+                    color="#545EE1"
+                  />
                   <Text
                     style={{
-                      fontSize: 16,
+                      fontSize: fp(16),
                       fontWeight: "600",
                       color: "#333",
-                      marginLeft: 10,
+                      marginLeft: sp(10),
                     }}
                   >
                     Details
@@ -653,9 +667,13 @@ const Orders: React.FC = () => {
                 </View>
 
                 {/* Specification Input */}
-                <View style={{ marginBottom: 16 }}>
+                <View style={{ marginBottom: sp(16) }}>
                   <Text
-                    style={{ fontSize: 13, color: "#666", marginBottom: 6 }}
+                    style={{
+                      fontSize: fp(13),
+                      color: "#666",
+                      marginBottom: sp(6),
+                    }}
                   >
                     Order Specification *
                   </Text>
@@ -669,20 +687,24 @@ const Orders: React.FC = () => {
                     }}
                     style={{
                       backgroundColor: "#F5F5F5",
-                      borderRadius: 10,
-                      padding: 12,
-                      fontSize: 14,
+                      borderRadius: br(10),
+                      padding: sp(12),
+                      fontSize: fp(14),
                       color: "#333",
-                      minHeight: 60,
+                      minHeight: sp(60),
                       textAlignVertical: "top",
-                      borderWidth: specificationError ? 1 : 0,
+                      borderWidth: specificationError ? sp(1) : 0,
                       borderColor: "#DC143C",
                     }}
                     multiline
                   />
                   {specificationError ? (
                     <Text
-                      style={{ color: "#DC143C", fontSize: 12, marginTop: 4 }}
+                      style={{
+                        color: "#DC143C",
+                        fontSize: fp(12),
+                        marginTop: sp(4),
+                      }}
                     >
                       {specificationError}
                     </Text>
@@ -692,7 +714,11 @@ const Orders: React.FC = () => {
                 {/* Delivery Instructions */}
                 <View>
                   <Text
-                    style={{ fontSize: 13, color: "#666", marginBottom: 6 }}
+                    style={{
+                      fontSize: fp(13),
+                      color: "#666",
+                      marginBottom: sp(6),
+                    }}
                   >
                     Delivery Instructions *
                   </Text>
@@ -706,18 +732,22 @@ const Orders: React.FC = () => {
                     }}
                     style={{
                       backgroundColor: "#F5F5F5",
-                      borderRadius: 10,
-                      padding: 12,
-                      fontSize: 14,
+                      borderRadius: br(10),
+                      padding: sp(12),
+                      fontSize: fp(14),
                       color: "#333",
-                      borderWidth: deliveryInstructionsError ? 1 : 0,
+                      borderWidth: deliveryInstructionsError ? sp(1) : 0,
                       borderColor: "#DC143C",
                     }}
                     multiline
                   />
                   {deliveryInstructionsError ? (
                     <Text
-                      style={{ color: "#DC143C", fontSize: 12, marginTop: 4 }}
+                      style={{
+                        color: "#DC143C",
+                        fontSize: fp(12),
+                        marginTop: sp(4),
+                      }}
                     >
                       {deliveryInstructionsError}
                     </Text>
@@ -727,22 +757,28 @@ const Orders: React.FC = () => {
             </View>
 
             {/* Payment & Options Row */}
-            <View style={{ paddingHorizontal: 20, marginTop: 12 }}>
-              <View style={{ flexDirection: "row", gap: 12 }}>
+            <View style={{ paddingHorizontal: sp(20), marginTop: sp(12) }}>
+              <View style={{ flexDirection: "row", gap: sp(12) }}>
                 {/* Tip Input */}
                 <TouchableOpacity
                   style={{
                     flex: 1,
                     backgroundColor: "rgba(255,255,255,0.95)",
-                    borderRadius: 16,
-                    padding: 14,
+                    borderRadius: br(16),
+                    padding: sp(14),
                     flexDirection: "row",
                     alignItems: "center",
                   }}
                   activeOpacity={1}
                 >
-                  <Ionicons name="heart" size={18} color="#545EE1" />
-                  <Text style={{ fontSize: 14, color: "#333", marginLeft: 8 }}>
+                  <Ionicons name="heart" size={iconSize(18)} color="#545EE1" />
+                  <Text
+                    style={{
+                      fontSize: fp(14),
+                      color: "#333",
+                      marginLeft: sp(8),
+                    }}
+                  >
                     Tip ₱
                   </Text>
                   <TextInput
@@ -755,9 +791,9 @@ const Orders: React.FC = () => {
                     keyboardType="numeric"
                     style={{
                       flex: 1,
-                      fontSize: 14,
+                      fontSize: fp(14),
                       color: "#333",
-                      marginLeft: 4,
+                      marginLeft: sp(4),
                       padding: 0,
                     }}
                   />
@@ -770,8 +806,8 @@ const Orders: React.FC = () => {
                     backgroundColor: isUrgent
                       ? "#545EE1"
                       : "rgba(255,255,255,0.95)",
-                    borderRadius: 16,
-                    padding: 14,
+                    borderRadius: br(16),
+                    padding: sp(14),
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "space-between",
@@ -782,14 +818,14 @@ const Orders: React.FC = () => {
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <Ionicons
                       name="flash"
-                      size={18}
+                      size={iconSize(18)}
                       color={isUrgent ? "white" : "#FF9800"}
                     />
                     <Text
                       style={{
-                        fontSize: 14,
+                        fontSize: fp(14),
                         color: isUrgent ? "white" : "#333",
-                        marginLeft: 8,
+                        marginLeft: sp(8),
                         fontWeight: "500",
                       }}
                     >
@@ -798,10 +834,10 @@ const Orders: React.FC = () => {
                   </View>
                   <View
                     style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 10,
-                      borderWidth: 2,
+                      width: iconSize(20),
+                      height: iconSize(20),
+                      borderRadius: br(10),
+                      borderWidth: sp(2),
                       borderColor: isUrgent ? "white" : "#ccc",
                       backgroundColor: isUrgent ? "white" : "transparent",
                       justifyContent: "center",
@@ -809,7 +845,11 @@ const Orders: React.FC = () => {
                     }}
                   >
                     {isUrgent && (
-                      <Ionicons name="checkmark" size={14} color="#545EE1" />
+                      <Ionicons
+                        name="checkmark"
+                        size={iconSize(14)}
+                        color="#545EE1"
+                      />
                     )}
                   </View>
                 </TouchableOpacity>
@@ -817,20 +857,20 @@ const Orders: React.FC = () => {
             </View>
 
             {/* Price Breakdown */}
-            <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+            <View style={{ paddingHorizontal: sp(20), marginTop: sp(16) }}>
               <View
                 style={{
                   backgroundColor: "rgba(255,255,255,0.95)",
-                  borderRadius: 16,
-                  padding: 16,
+                  borderRadius: br(16),
+                  padding: sp(16),
                 }}
               >
                 <Text
                   style={{
-                    fontSize: 14,
+                    fontSize: fp(14),
                     fontWeight: "600",
                     color: "#333",
-                    marginBottom: 12,
+                    marginBottom: sp(12),
                   }}
                 >
                   Price Breakdown
@@ -839,14 +879,18 @@ const Orders: React.FC = () => {
                   style={{
                     flexDirection: "row",
                     justifyContent: "space-between",
-                    marginBottom: 6,
+                    marginBottom: sp(6),
                   }}
                 >
-                  <Text style={{ color: "#666", fontSize: 13 }}>
+                  <Text style={{ color: "#666", fontSize: fp(13) }}>
                     Delivery Fee ({distanceKm.toFixed(1)} km)
                   </Text>
                   <Text
-                    style={{ color: "#333", fontSize: 13, fontWeight: "500" }}
+                    style={{
+                      color: "#333",
+                      fontSize: fp(13),
+                      fontWeight: "500",
+                    }}
                   >
                     ₱{deliveryFee}
                   </Text>
@@ -856,12 +900,16 @@ const Orders: React.FC = () => {
                     style={{
                       flexDirection: "row",
                       justifyContent: "space-between",
-                      marginBottom: 6,
+                      marginBottom: sp(6),
                     }}
                   >
-                    <Text style={{ color: "#666", fontSize: 13 }}>Tip</Text>
+                    <Text style={{ color: "#666", fontSize: fp(13) }}>Tip</Text>
                     <Text
-                      style={{ color: "#333", fontSize: 13, fontWeight: "500" }}
+                      style={{
+                        color: "#333",
+                        fontSize: fp(13),
+                        fontWeight: "500",
+                      }}
                     >
                       ₱{parseFloat(tipAmount)}
                     </Text>
@@ -872,16 +920,16 @@ const Orders: React.FC = () => {
                     style={{
                       flexDirection: "row",
                       justifyContent: "space-between",
-                      marginBottom: 6,
+                      marginBottom: sp(6),
                     }}
                   >
-                    <Text style={{ color: "#FF9800", fontSize: 13 }}>
+                    <Text style={{ color: "#FF9800", fontSize: fp(13) }}>
                       ⚡ Urgent Fee
                     </Text>
                     <Text
                       style={{
                         color: "#FF9800",
-                        fontSize: 13,
+                        fontSize: fp(13),
                         fontWeight: "500",
                       }}
                     >
@@ -891,9 +939,9 @@ const Orders: React.FC = () => {
                 )}
                 <View
                   style={{
-                    height: 1,
+                    height: sp(1),
                     backgroundColor: "#eee",
-                    marginVertical: 8,
+                    marginVertical: sp(8),
                   }}
                 />
                 <View
@@ -903,14 +951,18 @@ const Orders: React.FC = () => {
                   }}
                 >
                   <Text
-                    style={{ color: "#333", fontSize: 15, fontWeight: "700" }}
+                    style={{
+                      color: "#333",
+                      fontSize: fp(15),
+                      fontWeight: "700",
+                    }}
                   >
                     Total
                   </Text>
                   <Text
                     style={{
                       color: "#545EE1",
-                      fontSize: 15,
+                      fontSize: fp(15),
                       fontWeight: "700",
                     }}
                   >
@@ -921,31 +973,39 @@ const Orders: React.FC = () => {
             </View>
 
             {/* Order Button */}
-            <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+            <View style={{ paddingHorizontal: sp(20), marginTop: sp(16) }}>
               <TouchableOpacity
                 style={{
                   backgroundColor: isFormValid() ? "#545EE1" : "#999",
-                  paddingVertical: 16,
-                  borderRadius: 28,
+                  paddingVertical: sp(16),
+                  borderRadius: br(28),
                   flexDirection: "row",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  paddingHorizontal: 24,
+                  paddingHorizontal: sp(24),
                   shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 4 },
+                  shadowOffset: { width: 0, height: sp(4) },
                   shadowOpacity: 0.2,
-                  shadowRadius: 8,
+                  shadowRadius: br(8),
                   elevation: 5,
                 }}
                 onPress={handleOrderPress}
               >
                 <Text
-                  style={{ color: "white", fontWeight: "700", fontSize: 16 }}
+                  style={{
+                    color: "white",
+                    fontWeight: "700",
+                    fontSize: fp(16),
+                  }}
                 >
                   ₱{getTotalPrice()}
                 </Text>
                 <Text
-                  style={{ color: "white", fontWeight: "bold", fontSize: 18 }}
+                  style={{
+                    color: "white",
+                    fontWeight: "bold",
+                    fontSize: fp(18),
+                  }}
                 >
                   Order
                 </Text>

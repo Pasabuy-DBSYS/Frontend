@@ -25,8 +25,8 @@ import { useOtherUserStore } from "./store/user_store";
 
 const BASE_URL = `${API_BASE_URL}/Orders`;
 
-const { clearActiveOrder } = useActiveOrderStore.getState();
-const { setTempOrderRequest } = useActiveOrderStore.getState();
+// NOTE: Do NOT call getState() at module level - it causes circular dependency issues
+// Access stores inside functions instead: useActiveOrderStore.getState().clearActiveOrder()
 
 let connection: SignalR.HubConnection | null = null;
 
@@ -89,6 +89,7 @@ export const getCourierOrderHistory = async (): Promise<OrderResponseDTO[]> => {
         },
       }
     );
+
     return response.data;
   } catch (error: any) {
     console.error(
@@ -173,6 +174,7 @@ export const postOrder = async (
 ): Promise<any> => {
   const token = useAuthStore.getState().token;
   const { invokeHub } = useOrdersHubStore.getState();
+  const { setTempOrderRequest } = useActiveOrderStore.getState();
 
   try {
     const payload: PostOrderRequestDTO = {
@@ -464,6 +466,7 @@ export const updateOrderById = async (orderId: number, orderStatus: Status) => {
   try {
     const token = useAuthStore.getState().token;
     const { invokeHub } = useOrdersHubStore.getState();
+    const { clearActiveOrder } = useActiveOrderStore.getState();
 
     const response = await axios.patch(
       `${BASE_URL}/update/${orderId}/${orderStatus}`,

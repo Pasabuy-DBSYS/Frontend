@@ -45,11 +45,10 @@ export default function App() {
         const { initConnection: initNotificationHub, joinUserGroup } =
           useNotificationHubStore.getState();
         const { rehydrateActiveOrder } = useActiveOrderStore.getState();
-        const hasVisited = await AsyncStorage.getItem("hasVisited");
 
         
-        await AsyncStorage.removeItem("active-order-storage");
-        await AsyncStorage.removeItem("message-room-participants");
+        const hasVisited = await AsyncStorage.getItem("hasVisited");
+
         // 🔹 First-time launch or after clear cache
         if (!hasVisited) {
           await AsyncStorage.setItem("hasVisited", "true");

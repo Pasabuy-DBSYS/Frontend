@@ -7,6 +7,7 @@ import { useAuthStore } from "@/app/api/store/auth_store";
 import { Status } from "@/app/api/dto/response/order.response.dto";
 import { useOtherUserStore } from "@/app/api/store/user_store";
 import { Ionicons } from "@expo/vector-icons";
+import { UserResponseDTO } from "@/app/api/dto/response/auth.response.dto";
 
 // Clearer stage labels for the order flow
 const STATUS_LABELS = [
@@ -26,13 +27,23 @@ const getProgressStep = (status: Status): number => {
     case Status.IN_TRANSIT:
       return 2; // Picking Up / On The Way
     case Status.DELIVERED:
-    case Status.WATING_FOR_REVIEW:
-    case Status.REVIEWED:
       return 3; // Completed
     default:
       return 0;
   }
 };
+
+function formatOtherUserName(user: UserResponseDTO) {
+  const firstName =
+    user.firstName.charAt(0).toUpperCase() + user.firstName.slice(1);
+  const middleInitial = user.middleName
+    ? user.middleName.charAt(0).toUpperCase() + "."
+    : "";
+  const lastName =
+    user.lastName.charAt(0).toUpperCase() + user.lastName.slice(1);
+
+  return `${firstName} ${middleInitial} ${lastName}`.trim();
+}
 
 export default function ActiveOrderBanner() {
   const { activeOrder, pendingReview } = useActiveOrderStore();
@@ -76,11 +87,6 @@ export default function ActiveOrderBanner() {
   const progressStep = getProgressStep(activeOrder.status);
 
   // Get the other user's name
-  const otherUserName = otherUser
-    ? [otherUser.firstName, otherUser.lastName].filter(Boolean).join(" ")
-    : role === "Courier"
-    ? "Customer"
-    : "Courier";
 
   const deliveryAddress =
     activeOrder.deliveryDetailsDTO?.destinationAddress || "Delivery location";
@@ -199,7 +205,7 @@ export default function ActiveOrderBanner() {
               flex: 1,
             }}
           >
-            {otherUserName}
+            {formatOtherUserName(otherUser!)}
           </Text>
         </View>
 

@@ -6,13 +6,9 @@ export enum Status {
   PENDING = 0,
   ACCEPTED = 1,
   PICKED_UP = 2,
-
   IN_TRANSIT = 3,
   DELIVERED = 4,
-  WATING_FOR_REVIEW = 5,
-  REVIEWED = 6,
-
-  CANCELLED = 7,
+  CANCELLED = 5,
 }
 
 export enum Priority {
@@ -28,6 +24,8 @@ export interface OrderResponseDTO {
   priority: Priority;
   created_at: string;
   updated_at: string;
+  isCourierReviewed: boolean;
+  isCustomerReviewed: boolean;
   deliveryDetailsDTO: DeliveryDetailsResponseDTO;
   paymentsResponseDTO: PaymentsResponseDTO;
   chatRoomResponseDTO: ChatRoomResponseDTO;

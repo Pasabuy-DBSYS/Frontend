@@ -36,44 +36,51 @@ const RATING_LABELS = [
 const ReviewOrder = () => {
   const navigation = useNavigation<any>();
   const route = useRoute();
-  const { orderId, courierId } = (route.params as {
+  const { orderId, revieweeId, courierId } = (route.params as {
     orderId: number;
-    courierId: number;
-  }) || { orderId: 0, courierId: 0 };
+    revieweeId?: number;
+    courierId?: number; // Keep for backward compatibility
+  }) || { orderId: 0 };
+
+  // Use revieweeId if provided, otherwise fall back to courierId for backward compatibility
+  const targetUserId = revieweeId || courierId || 0;
 
   const [rating, setRating] = useState(4);
   const [feedback, setFeedback] = useState("");
-  const [courier, setCourier] = useState<UserResponseDTO | null>(null);
+  const [reviewee, setReviewee] = useState<UserResponseDTO | null>(null);
   const { clearActiveOrder, setPendingReview } = useActiveOrderStore();
-  const { user } = useAuthStore();
+  const { user, isCourier } = useAuthStore();
 
-  const roleMap = {
-    [Roles.Customer]: "CustomerNavigationBar",
-    [Roles.Courier]: "CourierNavigationBar",
+  const roleMap: Record<number, string> = {
+    0: "CustomerNavigationBar", // Role.CUSTOMER
+    1: "CourierNavigationBar", // Role.COURIER
+    2: "CustomerNavigationBar", // Roles.Customer
   };
 
   useEffect(() => {
-    const fetchCourier = async () => {
-      if (courierId) {
+    const fetchReviewee = async () => {
+      if (targetUserId) {
         try {
-          const data = await getUserById(courierId);
-          setCourier(data);
+          const data = await getUserById(targetUserId);
+          setReviewee(data);
         } catch (err) {
-          console.error("Failed to fetch courier info:", err);
+          console.error("Failed to fetch user info:", err);
         }
       }
     };
-    fetchCourier();
-  }, [courierId]);
+    fetchReviewee();
+  }, [targetUserId]);
 
-  // Default courier data
-  const courierName = courier?.firstName
-    ? `${courier.firstName} ${courier.lastName || ""}`.trim()
+  // Dynamic labels based on role
+  const revieweeName = reviewee?.firstName
+    ? `${reviewee.firstName} ${reviewee.lastName || ""}`.trim()
+    : isCourier
+    ? "Your Customer"
     : "Your Courier";
 
   const handleSubmit = async () => {
-    if (!orderId || !courierId) {
-      console.error("Missing order ID or courier ID");
+    if (!orderId) {
+      console.error("Missing order ID");
       return;
     }
 
@@ -92,21 +99,22 @@ const ReviewOrder = () => {
         return;
       }
 
-      // Handle both potential enum values for Customer (0 or 2) to be safe
-      // Roles.Customer is 2, but types.Role.CUSTOMER is 0
-      const currentRole = user.currentRole as unknown as number;
+      // Handle both potential enum values for Customer (0 or 1) to be safe
+      // Roles.Customer is 1, but types.Role.CUSTOMER is 0
 
-      if (currentRole === Roles.Customer || currentRole === 0) {
-        reviewedUserID = order.courierId;
-      } else if (currentRole === Roles.Courier || currentRole === 1) {
-        reviewedUserID = order.customerId;
-      }
+      const currentRole = user.currentRole as number;
+
+      console.log(`Current Role: ${currentRole}`);
+
+      if (isCourier) reviewedUserID = order.customerId;
+      else reviewedUserID = order.courierId;
 
       const reviewData: PostReviewRequestDTO = {
         orderIDFK: orderId,
         reviewedUserID,
         rating: rating,
         comment: feedback,
+        isCourier,
       };
 
       console.log("Review Data: ", reviewData);
@@ -145,7 +153,7 @@ const ReviewOrder = () => {
     // Navigate to home
     navigation.reset({
       index: 0,
-      routes: [{ name: roleMap[user.currentRole] }],
+      routes: [{ name: roleMap[user?.currentRole ?? 0] }],
     });
   };
 
@@ -234,7 +242,7 @@ const ReviewOrder = () => {
           >
             <Image
               source={{
-                uri: `https://pasabuyres.s3.ap-southeast-2.amazonaws.com/${courier?.profilePictureKey}`,
+                uri: `https://pasabuyres.s3.ap-southeast-2.amazonaws.com/${reviewee?.profilePictureKey}`,
               }}
               cachePolicy={"memory-disk"}
               style={{ width: 80, height: 80 }}
@@ -248,7 +256,7 @@ const ReviewOrder = () => {
               color: "#777",
             }}
           >
-            Rate your delivery by {courierName}
+            Rate your {isCourier ? "customer" : "delivery by"} {revieweeName}
           </Text>
 
           <Text

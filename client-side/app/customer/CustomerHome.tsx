@@ -18,6 +18,11 @@ import { useOrdersHubStore } from "../api/store/orders_hub_store";
 import { Status } from "../api/dto/response/order.response.dto";
 import { LinearGradient } from "expo-linear-gradient";
 import { Role } from "@/types/types";
+import { useNotificationStore } from "../api/store/notification_store";
+import { useNotificationHubStore } from "../api/store/notification_hub_store";
+import { StatisticsResponseCustomerDTO } from "../api/dto/response/statistics.response.dto";
+import { getStatisticsAsCustomer } from "../api/statistics";
+import { stat } from "fs";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -27,12 +32,16 @@ interface HomeProps {
 
 const Home = ({ setActiveTab }: HomeProps) => {
   const [toggleModal, setToggleModal] = useState<boolean>(false);
+  const [statistics, setStatistics] = useState<StatisticsResponseCustomerDTO>();
 
   const [isHydrationComplete, setIsHydrationComplete] =
     useState<boolean>(false);
   const navigator = useNavigation();
-  const { user } = useAuthStore();
+  const { user, isCourier } = useAuthStore();
   const { activeOrder } = useActiveOrderStore();
+  const { unreadCount } = useNotificationStore();
+  const { initConnection } = useNotificationHubStore();
+  const { addHandler } = useOrdersHubStore();
 
   const hasActiveOrder = activeOrder !== null;
 
@@ -53,44 +62,53 @@ const Home = ({ setActiveTab }: HomeProps) => {
       // 1. Change role on server & update token (token is updated inside changeRole)
       const { newToken, user } = await changeRole();
 
-      // 2. If we got a new token, ensure it's set
+      // 2. If we got a new token, ensure it's set and wait for it
       if (newToken && typeof newToken === "string") {
         await useAuthStore.getState().refreshToken(newToken);
+        // Wait a bit to ensure token is fully updated
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
       // Get the new role from the updated user
       const newRole =
         user?.currentRole ?? useAuthStore.getState().user?.currentRole;
 
-      const { disconnect, initConnection, invokeHub } =
+      const { disconnect, initConnection, joinRoleGroup } =
         useOrdersHubStore.getState();
 
-      // 3. Disconnect existing hub connection
-      await disconnect();
 
-      // 4. Initialize a new connection with the new token/role
-      await initConnection();
-
-      // 5. Join the correct group based on the new role
-      if (newRole === Role.COURIER) {
-        await invokeHub("JoinCourierGroup");
-        console.log("[SWITCH] Joined CourierGroup");
-      } else if (newRole === Role.CUSTOMER) {
-        await invokeHub("JoinCustomerGroup");
-        console.log("[SWITCH] Joined CustomerGroup");
-      }
+      // 5. Join the correct group based on the new role using the proper method
+      const roleGroup = newRole === Role.COURIER ? "courier" : "customer";
+      await joinRoleGroup(roleGroup);
+      console.log(`[SWITCH] Joined ${roleGroup} group`);
 
       // 6. Rehydrate active order for the NEW role
       await useActiveOrderStore.getState().rehydrateActiveOrder();
     } catch (error) {
       console.error("Error changing role and resetting connection:", error);
+      // Revert to original state if role switching fails
+      await useAuthStore.getState().refreshUser();
     }
   };
+
+  useEffect(() => {
+    const fetchStatistics = async () => {
+      const response = await getStatisticsAsCustomer();
+
+      if (response) {
+        setStatistics(response);
+        console.log(`STATISTICS: ${JSON.stringify(response)}`);
+      }
+    };
+
+    if (!isCourier) fetchStatistics();
+  }, [isCourier]); // Re-fetch when role changes
 
   useEffect(() => {
     const checkActiveOrder = async () => {
       const { rehydrateActiveOrder } = useActiveOrderStore.getState();
       try {
+        console.log(`IS COURIER? ATILLO ${isCourier}`);
         await rehydrateActiveOrder(); // Waits for the API call/state update
       } catch (error) {
         console.error("Initial order check failed:", error);
@@ -101,6 +119,18 @@ const Home = ({ setActiveTab }: HomeProps) => {
     };
     checkActiveOrder();
   }, []);
+
+  useEffect(() => {
+    // Initialize notification hub
+    const initNotificationHub = async () => {
+      try {
+        await initConnection();
+      } catch (error) {
+        console.error("Failed to initialize notification hub:", error);
+      }
+    };
+    initNotificationHub();
+  }, [initConnection]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -158,13 +188,42 @@ const Home = ({ setActiveTab }: HomeProps) => {
                   backgroundColor: "#F5F5F5",
                   justifyContent: "center",
                   alignItems: "center",
+                  position: "relative",
                 }}
+                onPress={() => setActiveTab?.(1)}
               >
                 <Ionicons
                   name="notifications-outline"
                   size={24}
                   color="#545EE1"
                 />
+                {unreadCount > 0 && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -4,
+                      right: -4,
+                      backgroundColor: "#F44336",
+                      borderRadius: 12,
+                      width: 24,
+                      height: 24,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      borderWidth: 2,
+                      borderColor: "#fff",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontSize: 11,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -437,7 +496,7 @@ const Home = ({ setActiveTab }: HomeProps) => {
                   <Text
                     style={{ fontSize: 24, fontWeight: "bold", color: "#333" }}
                   >
-                    12
+                    {statistics?.totalOrders}
                   </Text>
                   <Text style={{ fontSize: 12, color: "#888" }}>
                     Total Orders
@@ -469,7 +528,7 @@ const Home = ({ setActiveTab }: HomeProps) => {
                   <Text
                     style={{ fontSize: 24, fontWeight: "bold", color: "#333" }}
                   >
-                    ₱850
+                    ₱{statistics?.totalSpent}
                   </Text>
                   <Text style={{ fontSize: 12, color: "#888" }}>
                     Total Spent
@@ -501,7 +560,7 @@ const Home = ({ setActiveTab }: HomeProps) => {
                   <Text
                     style={{ fontSize: 24, fontWeight: "bold", color: "#333" }}
                   >
-                    4.8
+                    {statistics?.totalRating}
                   </Text>
                   <Text style={{ fontSize: 12, color: "#888" }}>Rating</Text>
                 </View>

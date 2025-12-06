@@ -60,15 +60,24 @@ import Camera from "@/components/svg/Camera";
 import OrderDelivered from "@/components/modals/OrderDelivered";
 import { navigate } from "expo-router/build/global-state/routing";
 import { usePaymentStore } from "../api/store/payment_store";
-
-const { height } = Dimensions.get("window");
+import {
+  hp,
+  wp,
+  fp,
+  ms,
+  sp,
+  br,
+  iconSize,
+  SCREEN_HEIGHT,
+  SCREEN_WIDTH,
+} from "@/constants/responsive";
 
 const CustomerTrackingView = () => {
   const courierInfo = useOtherUser();
-  const initialHeight = height * 0.15;
+  const initialHeight = hp(18); // ~18% of screen height
   const [collapsedHeight, setCollapsedHeight] = useState(initialHeight);
   const [showCancel, setShowCancel] = useState(false);
-  const [expandedHeight, setExpandedHeight] = useState(height * 0.6);
+  const [expandedHeight, setExpandedHeight] = useState(hp(55)); // ~55% of screen height
   const animatedHeight = useRef(new Animated.Value(initialHeight)).current;
   const [disabledButton, setDisabledButton] = useState(false);
   const {
@@ -207,11 +216,11 @@ const CustomerTrackingView = () => {
     if (!activeOrder) return;
 
     if (activeOrder.status === 0) {
-      setCollapsedHeight(height * 0.15);
-      setExpandedHeight(height * 0.36);
+      setCollapsedHeight(hp(15));
+      setExpandedHeight(hp(36));
     } else {
-      setCollapsedHeight(height * 0.15);
-      setExpandedHeight(height * 0.6);
+      setCollapsedHeight(hp(15));
+      setExpandedHeight(hp(60));
     }
   }, [activeOrder?.status]);
 
@@ -809,9 +818,9 @@ const CustomerTrackingView = () => {
           bottom: 0,
           height: animatedHeight,
           backgroundColor: "#fff",
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          padding: 16,
+          borderTopLeftRadius: br(20),
+          borderTopRightRadius: br(20),
+          padding: sp(16),
           shadowColor: "#000",
           shadowOpacity: 0.15,
           shadowRadius: 8,
@@ -821,13 +830,13 @@ const CustomerTrackingView = () => {
         {...panResponder.panHandlers}
       >
         {activeOrder?.status !== 0 && (
-          <View style={{ alignItems: "center", marginBottom: 12 }}>
+          <View style={{ alignItems: "center", marginBottom: sp(12) }}>
             <View
               style={{
-                width: 40,
-                height: 5,
+                width: wp(12),
+                height: hp(0.6),
                 backgroundColor: "#ccc",
-                borderRadius: 3,
+                borderRadius: br(3),
               }}
             />
           </View>
@@ -842,12 +851,12 @@ const CustomerTrackingView = () => {
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                marginBottom: 6,
+                marginBottom: sp(6),
               }}
             >
               <Text
                 style={{
-                  fontSize: 20,
+                  fontSize: fp(18),
                   fontWeight: "700",
                   color: "#222",
                 }}
@@ -859,15 +868,15 @@ const CustomerTrackingView = () => {
 
             <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
               <LocationVioletIcon
-                width={26}
-                height={24}
-                style={{ marginRight: 10, marginTop: 2 }}
+                width={iconSize(26)}
+                height={iconSize(24)}
+                style={{ marginRight: sp(10), marginTop: sp(2) }}
               />
               <View style={{ flex: 1 }}>
                 <Text
                   style={{
                     color: "#000000ff",
-                    fontSize: 15,
+                    fontSize: fp(14),
                     fontWeight: "500",
                   }}
                 >
@@ -876,9 +885,9 @@ const CustomerTrackingView = () => {
                 <Text
                   style={{
                     color: "#555",
-                    fontSize: 14,
-                    lineHeight: 20,
-                    marginTop: 2,
+                    fontSize: fp(13),
+                    lineHeight: fp(18),
+                    marginTop: sp(2),
                   }}
                 >
                   {activeOrder.deliveryDetailsDTO?.destinationAddress}
@@ -899,12 +908,12 @@ const CustomerTrackingView = () => {
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  marginBottom: 6,
+                  marginBottom: sp(6),
                 }}
               >
                 <Text
                   style={{
-                    fontSize: 20,
+                    fontSize: fp(18),
                     fontWeight: "700",
                     color: "#222",
                   }}
@@ -920,7 +929,7 @@ const CustomerTrackingView = () => {
               style={{
                 flexDirection: "row",
                 justifyContent: "center",
-                paddingHorizontal: 10,
+                paddingHorizontal: sp(10),
               }}
             >
               <Animated.View
@@ -929,7 +938,7 @@ const CustomerTrackingView = () => {
                   opacity: actionAnim,
                   height: actionAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [0, 80],
+                    outputRange: [0, ms(80)],
                   }),
                 }}
               >
@@ -941,14 +950,14 @@ const CustomerTrackingView = () => {
                     width: "100%",
                   }}
                 >
-                  <EditOrder height={64} width={64} />
+                  <EditOrder height={iconSize(64)} width={iconSize(64)} />
                   {/* Disable cancel if payment is confirmed */}
                   <TouchableOpacity
                     onPress={() => !isPaymentConfirmed && setShowCancel(true)}
                     disabled={isPaymentConfirmed}
                     style={{ opacity: isPaymentConfirmed ? 0.4 : 1 }}
                   >
-                    <CancelOrder height={64} width={64} />
+                    <CancelOrder height={iconSize(64)} width={iconSize(64)} />
                   </TouchableOpacity>
                 </View>
               </Animated.View>
@@ -958,24 +967,24 @@ const CustomerTrackingView = () => {
             <View style={{ flexDirection: "row" }}>
               <View style={{ flexDirection: "column" }}>
                 <LocationVioletIcon
-                  width={26}
-                  height={24}
-                  style={{ marginRight: 10, marginTop: 2 }}
+                  width={iconSize(26)}
+                  height={iconSize(24)}
+                  style={{ marginRight: sp(10), marginTop: sp(2) }}
                 />
                 <View
                   style={{
                     width: 1,
                     backgroundColor: "black",
-                    marginVertical: 10,
-                    marginLeft: 12,
-                    height: 40, // adjust as needed
+                    marginVertical: sp(10),
+                    marginLeft: sp(12),
+                    height: ms(40),
                   }}
                 />
               </View>
 
               <View style={{ flex: 1 }}>
                 <Text
-                  style={{ color: "#777", fontSize: 15, fontWeight: "500" }}
+                  style={{ color: "#777", fontSize: fp(14), fontWeight: "500" }}
                 >
                   Delivery
                 </Text>
@@ -983,9 +992,9 @@ const CustomerTrackingView = () => {
                 <Text
                   style={{
                     color: "#555",
-                    fontSize: 14,
-                    lineHeight: 20,
-                    marginTop: 2,
+                    fontSize: fp(13),
+                    lineHeight: fp(18),
+                    marginTop: sp(2),
                   }}
                 >
                   {activeOrder?.deliveryDetailsDTO?.destinationAddress}
@@ -1003,14 +1012,14 @@ const CustomerTrackingView = () => {
 
             <View style={{ flexDirection: "row" }}>
               <PickIcon
-                width={26}
-                height={24}
-                style={{ marginRight: 10, marginTop: 2 }}
+                width={iconSize(26)}
+                height={iconSize(24)}
+                style={{ marginRight: sp(10), marginTop: sp(2) }}
               />
 
               <View style={{ flex: 1 }}>
                 <Text
-                  style={{ color: "#777", fontSize: 15, fontWeight: "500" }}
+                  style={{ color: "#777", fontSize: fp(14), fontWeight: "500" }}
                 >
                   Buy
                 </Text>
@@ -1018,9 +1027,9 @@ const CustomerTrackingView = () => {
                 <Text
                   style={{
                     color: "#555",
-                    fontSize: 14,
-                    lineHeight: 20,
-                    marginTop: 2,
+                    fontSize: fp(13),
+                    lineHeight: fp(18),
+                    marginTop: sp(2),
                     maxWidth: "75%",
                   }}
                 >
@@ -1028,9 +1037,13 @@ const CustomerTrackingView = () => {
                 </Text>
               </View>
 
-              <View style={{ flexDirection: "column", marginRight: 15 }}>
-                <Text style={{ fontWeight: "700" }}>Order No.</Text>
-                <Text style={{ color: "#555" }}>#{activeOrder?.orderIdPK}</Text>
+              <View style={{ flexDirection: "column", marginRight: sp(15) }}>
+                <Text style={{ fontWeight: "700", fontSize: fp(13) }}>
+                  Order No.
+                </Text>
+                <Text style={{ color: "#555", fontSize: fp(12) }}>
+                  #{activeOrder?.orderIdPK}
+                </Text>
               </View>
             </View>
           </View>
@@ -1038,7 +1051,7 @@ const CustomerTrackingView = () => {
 
         {!expanded && activeOrder?.status !== 0 && (
           <View>
-            <View style={{ flexDirection: "column", gap: 10 }}>
+            <View style={{ flexDirection: "column", gap: sp(10) }}>
               <View
                 style={{
                   flexDirection: "row",
@@ -1048,41 +1061,60 @@ const CustomerTrackingView = () => {
               >
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <DeliverProfileIcon
-                    width={26}
-                    height={24}
-                    style={{ marginRight: 10 }}
+                    width={iconSize(26)}
+                    height={iconSize(24)}
+                    style={{ marginRight: sp(10) }}
                   />
                   <Text
-                    style={{ fontWeight: "700", fontSize: 18, color: "#111" }}
+                    style={{
+                      fontWeight: "700",
+                      fontSize: fp(16),
+                      color: "#111",
+                    }}
                   >
                     {courierInfo?.firstName}
                   </Text>
                 </View>
 
-                <Button
-                  onPress={() => navigator.navigate("MessagePage")}
-                  title="Message"
-                  width={85}
-                  height={30}
-                  borderRadius={20}
-                  backgroundColor="#545EE1"
-                  textColor="white"
-                />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: sp(8) }}>
+                  <Ionicons
+                    name="star"
+                    size={16}
+                    color="#545EE1"
+                  />
+                  <Text style={{ fontSize: fp(12), color: "#545EE1", fontWeight: "600" }}>
+                    {courierInfo?.ratingAverage?.toFixed(1) || "N/A"}
+                  </Text>
+                  <Button
+                    onPress={() => navigator.navigate("MessagePage")}
+                    title="Message"
+                    width={ms(85)}
+                    height={ms(30)}
+                    borderRadius={br(20)}
+                    backgroundColor="#545EE1"
+                    textColor="white"
+                    fontSize={fp(12)}
+                  />
+                </View>
               </View>
 
               <View style={{ flexDirection: "row" }}>
                 <LocationVioletIcon
-                  width={26}
-                  height={24}
-                  style={{ marginRight: 10, marginTop: 2 }}
+                  width={iconSize(26)}
+                  height={iconSize(24)}
+                  style={{ marginRight: sp(10), marginTop: sp(2) }}
                 />
                 <View style={{ flex: 1 }}>
                   <Text
-                    style={{ color: "#777", fontSize: 15, fontWeight: "500" }}
+                    style={{
+                      color: "#777",
+                      fontSize: fp(14),
+                      fontWeight: "500",
+                    }}
                   >
                     Delivery
                   </Text>
-                  <Text style={{ color: "#555", fontSize: 14 }}>
+                  <Text style={{ color: "#555", fontSize: fp(13) }}>
                     {activeOrder.deliveryDetailsDTO?.destinationAddress}
                   </Text>
                 </View>
@@ -1092,9 +1124,9 @@ const CustomerTrackingView = () => {
         )}
 
         {expanded && activeOrder?.status !== 0 && (
-          <View style={{ marginTop: 15, gap: 20 }}>
+          <View style={{ marginTop: sp(15), gap: sp(20) }}>
             <View>
-              <View style={{ flexDirection: "column", gap: 10 }}>
+              <View style={{ flexDirection: "column", gap: sp(10) }}>
                 <View
                   style={{
                     flexDirection: "row",
@@ -1104,42 +1136,65 @@ const CustomerTrackingView = () => {
                 >
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <DeliverProfileIcon
-                      width={26}
-                      height={24}
-                      style={{ marginRight: 10 }}
+                      width={iconSize(26)}
+                      height={iconSize(24)}
+                      style={{ marginRight: sp(10) }}
                     />
                     <Text
-                      style={{ fontWeight: "700", fontSize: 18, color: "#111" }}
+                      style={{
+                        fontWeight: "700",
+                        fontSize: fp(16),
+                        color: "#111",
+                      }}
                     >
                       {courierInfo?.firstName}
                     </Text>
                   </View>
 
-                  <Button
-                    onPress={() => navigator.navigate("MessagePage")}
-                    title="Message"
-                    width={85}
-                    height={30}
-                    borderRadius={20}
-                    backgroundColor="#545EE1"
-                    textColor="white"
-                  />
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: sp(8) }}>
+                    <Ionicons
+                      name="star"
+                      size={16}
+                      color="#545EE1"
+                    />
+                    <Text style={{ fontSize: fp(12), color: "#545EE1", fontWeight: "600" }}>
+                      {courierInfo?.ratingAverage?.toFixed(1) || "N/A"}
+                    </Text>
+                    <Button
+                      onPress={() => navigator.navigate("MessagePage")}
+                      title="Message"
+                      width={ms(85)}
+                      height={ms(30)}
+                      borderRadius={br(20)}
+                      backgroundColor="#545EE1"
+                      textColor="white"
+                      fontSize={fp(12)}
+                    />
+                  </View>
                 </View>
 
                 <View style={{ flexDirection: "row" }}>
                   <LocationVioletIcon
-                    width={26}
-                    height={24}
-                    style={{ marginRight: 10, marginTop: 2 }}
+                    width={iconSize(26)}
+                    height={iconSize(24)}
+                    style={{ marginRight: sp(10), marginTop: sp(2) }}
                   />
                   <View style={{ flex: 1 }}>
                     <Text
-                      style={{ color: "#777", fontSize: 15, fontWeight: "500" }}
+                      style={{
+                        color: "#777",
+                        fontSize: fp(14),
+                        fontWeight: "500",
+                      }}
                     >
                       Delivery
                     </Text>
                     <Text
-                      style={{ color: "#555", fontSize: 14, maxWidth: "75%" }}
+                      style={{
+                        color: "#555",
+                        fontSize: fp(13),
+                        maxWidth: "75%",
+                      }}
                     >
                       {activeOrder.deliveryDetailsDTO?.destinationAddress}
                     </Text>
@@ -1155,26 +1210,35 @@ const CustomerTrackingView = () => {
                   justifyContent: "space-between",
                 }}
               >
-                <View style={{ flexDirection: "column", marginBottom: 10 }}>
+                <View style={{ flexDirection: "column", marginBottom: sp(10) }}>
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
                     <PickIcon
-                      width={20}
-                      height={20}
-                      style={{ marginRight: 8 }}
+                      width={iconSize(20)}
+                      height={iconSize(20)}
+                      style={{ marginRight: sp(8) }}
                     />
-                    <Text style={{ fontWeight: "700", fontSize: 18 }}>Buy</Text>
+                    <Text style={{ fontWeight: "700", fontSize: fp(16) }}>
+                      Buy
+                    </Text>
                   </View>
 
                   <Text
-                    style={{ marginLeft: 28, color: "#555", maxWidth: "75%" }}
+                    style={{
+                      marginLeft: sp(28),
+                      color: "#555",
+                      maxWidth: "75%",
+                      fontSize: fp(13),
+                    }}
                   >
                     {activeOrder?.deliveryDetailsDTO?.customerAddress}
                   </Text>
                 </View>
 
-                <View style={{ flexDirection: "column", marginRight: 15 }}>
-                  <Text style={{ fontWeight: "700" }}>Order No.</Text>
-                  <Text style={{ color: "#555" }}>
+                <View style={{ flexDirection: "column", marginRight: sp(15) }}>
+                  <Text style={{ fontWeight: "700", fontSize: fp(13) }}>
+                    Order No.
+                  </Text>
+                  <Text style={{ color: "#555", fontSize: fp(12) }}>
                     #{activeOrder?.orderIdPK}
                   </Text>
                 </View>
@@ -1184,66 +1248,70 @@ const CustomerTrackingView = () => {
                 style={{
                   borderWidth: 1,
                   borderColor: "#154D71",
-                  borderRadius: 8,
-                  padding: 8,
-                  marginTop: 6,
-                  gap: 10,
+                  borderRadius: br(8),
+                  padding: sp(8),
+                  marginTop: sp(6),
+                  gap: sp(10),
                 }}
               >
-                <Text>{activeOrder?.request}</Text>
+                <Text style={{ fontSize: fp(13) }}>{activeOrder?.request}</Text>
               </View>
             </View>
 
             <View>
-              <Text style={{ fontWeight: "700", fontSize: 18 }}>
+              <Text style={{ fontWeight: "700", fontSize: fp(16) }}>
                 Delivery Instructions:
               </Text>
               <View
                 style={{
                   borderWidth: 1,
                   borderColor: "#154D71",
-                  borderRadius: 8,
-                  padding: 8,
-                  marginTop: 6,
+                  borderRadius: br(8),
+                  padding: sp(8),
+                  marginTop: sp(6),
                 }}
               >
-                <Text>{activeOrder?.deliveryDetailsDTO?.deliveryNotes}</Text>
+                <Text style={{ fontSize: fp(13) }}>
+                  {activeOrder?.deliveryDetailsDTO?.deliveryNotes}
+                </Text>
               </View>
             </View>
 
             <View>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={{ fontWeight: "600", fontSize: 18 }}>
+                <Text style={{ fontWeight: "600", fontSize: fp(16) }}>
                   Delivery Fee:
                 </Text>
                 <View
                   style={{
                     borderWidth: 1,
                     borderColor: "#aaa",
-                    paddingHorizontal: 8,
-                    marginLeft: 5,
-                    height: 25,
+                    paddingHorizontal: sp(8),
+                    marginLeft: sp(5),
+                    height: ms(25),
                     justifyContent: "center",
                   }}
                 >
-                  <Text style={{ fontWeight: "600" }}>
+                  <Text style={{ fontWeight: "600", fontSize: fp(13) }}>
                     {activeOrder?.paymentsResponseDTO?.deliveryFee}
                   </Text>
                 </View>
               </View>
-              <Text style={{ color: "#555", marginTop: 10 }}>
+              <Text
+                style={{ color: "#555", marginTop: sp(10), fontSize: fp(12) }}
+              >
                 Note: You only have 10 minutes to cancel the delivery
               </Text>
             </View>
-            <View style={{ marginTop: 10, alignItems: "center" }}>
+            <View style={{ marginTop: sp(10), alignItems: "center" }}>
               <TouchableOpacity
                 onPress={() => setShowCancel(true)}
                 style={{
                   backgroundColor: !disabledButton ? "#E53935" : "#154D71",
                   opacity: !disabledButton ? 1 : 0.5,
-                  paddingVertical: 12,
-                  paddingHorizontal: 24,
-                  borderRadius: 8,
+                  paddingVertical: sp(12),
+                  paddingHorizontal: sp(24),
+                  borderRadius: br(8),
                   alignItems: "center",
                   justifyContent: "center",
                   width: "100%",
@@ -1254,7 +1322,7 @@ const CustomerTrackingView = () => {
                   style={{
                     color: "white",
                     fontWeight: "700",
-                    fontSize: 16,
+                    fontSize: fp(14),
                   }}
                 >
                   Cancel Delivery

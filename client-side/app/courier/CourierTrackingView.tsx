@@ -52,8 +52,17 @@ import StudentGraphics from "@/components/svg/StudentGraphics";
 import OrderCancelledCourier from "@/components/modals/CourierOrderCancelled";
 import OrderDelivered from "@/components/modals/OrderDelivered";
 import { usePaymentStore } from "../api/store/payment_store";
-
-const { height } = Dimensions.get("window");
+import {
+  hp,
+  wp,
+  fp,
+  ms,
+  sp,
+  br,
+  iconSize,
+  SCREEN_HEIGHT,
+  SCREEN_WIDTH,
+} from "@/constants/responsive";
 
 // Helper function to calculate distance between two coordinates (in meters)
 const getDistance = (coord1: Coordinates, coord2: Coordinates): number => {
@@ -77,8 +86,8 @@ const getDistance = (coord1: Coordinates, coord2: Coordinates): number => {
 const CourierTrackingView = () => {
   // --- START: ALL HOOKS MUST BE AT THE TOP ---
   const customerInfo = useOtherUser();
-  const collapsedHeight = height * 0.2;
-  const expandedHeight = height * 0.7;
+  const [collapsedHeight, setCollapsedHeight] = useState(hp(20)); // ~20% of screen height
+  const [expandedHeight, setExpandedHeight] = useState(hp(75)); // ~65% of screen height
   const animatedHeight = useRef(new Animated.Value(collapsedHeight)).current;
 
   const { activeOrder, setActiveOrder } = useActiveOrderStore();
@@ -106,6 +115,7 @@ const CourierTrackingView = () => {
   const mapRef = useRef<MapView>(null);
   const [myLocation, setMyLocation] = useState<Coordinates | null>(null);
 
+  const initialHeight = hp(18); // ~18% of screen height
   const [trackCourierLocation, setTrackCourierLocation] = useState<Coordinates>(
     {
       latitude: activeOrder?.deliveryDetailsDTO?.courierLatitude ?? 0,
@@ -387,7 +397,10 @@ const CourierTrackingView = () => {
 
         // Handler for payment responded (generic payment update)
         addHandler("PaymentProposalAccepted", (paymentData: any) => {
-          console.log("💳 [COURIER] PaymentProposalAccepted received:", paymentData);
+          console.log(
+            "💳 [COURIER] PaymentProposalAccepted received:",
+            paymentData
+          );
           usePaymentStore.getState().setPayment(paymentData);
         });
 
@@ -395,8 +408,9 @@ const CourierTrackingView = () => {
           `[HUB][COURIER] SignalR setup complete for order: ${activeOrder.orderIdPK}`
         );
 
-        if (activeOrder.status === 4) setIsDelivered(true);
-        if (activeOrder.status === 7) setOrderCancelledModal(true);
+        if (activeOrder.status === Status.DELIVERED) setIsDelivered(true);
+        if (activeOrder.status === Status.CANCELLED)
+          setOrderCancelledModal(true);
       } catch (err) {
         console.error("SignalR Setup Error:", err);
       }
@@ -601,10 +615,10 @@ const CourierTrackingView = () => {
       {/* Header Section */}
       <View
         style={{
-          height: 110,
+          height: hp(14),
           backgroundColor: "#545EE1",
-          paddingHorizontal: 20,
-          paddingTop: 60,
+          paddingHorizontal: sp(20),
+          paddingTop: hp(7),
           zIndex: 2,
         }}
       >
@@ -635,9 +649,9 @@ const CourierTrackingView = () => {
           <Text
             style={{
               color: "#fff",
-              fontSize: 20,
+              fontSize: fp(20),
               fontWeight: "700",
-              marginLeft: 16,
+              marginLeft: sp(16),
             }}
           >
             Location
@@ -649,9 +663,9 @@ const CourierTrackingView = () => {
       <View
         style={{
           flex: 1,
-          marginTop: -30,
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
+          marginTop: hp(-3.5),
+          borderTopLeftRadius: br(20),
+          borderTopRightRadius: br(20),
           overflow: "hidden",
         }}
       >
@@ -664,23 +678,23 @@ const CourierTrackingView = () => {
           >
             <View
               style={{
-                width: 50,
-                height: 50,
-                borderRadius: 25,
+                width: ms(50),
+                height: ms(50),
+                borderRadius: br(25),
                 justifyContent: "center",
                 alignItems: "center",
               }}
             >
               <View
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
+                  width: ms(40),
+                  height: ms(40),
+                  borderRadius: br(20),
                   justifyContent: "center",
                   alignItems: "center",
                 }}
               >
-                <StudentGraphics width={28} height={28} />
+                <StudentGraphics width={iconSize(28)} height={iconSize(28)} />
               </View>
             </View>
           </MarkerAnimated>
@@ -692,9 +706,9 @@ const CourierTrackingView = () => {
           >
             <View
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
+                width: ms(32),
+                height: ms(32),
+                borderRadius: br(16),
                 backgroundColor:
                   phase === "pickup"
                     ? "rgba(76, 175, 80, 0.2)"
@@ -705,9 +719,9 @@ const CourierTrackingView = () => {
             >
               <View
                 style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 11,
+                  width: ms(22),
+                  height: ms(22),
+                  borderRadius: br(11),
                   backgroundColor: "white",
                   justifyContent: "center",
                   alignItems: "center",
@@ -717,9 +731,9 @@ const CourierTrackingView = () => {
               >
                 <View
                   style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
+                    width: ms(10),
+                    height: ms(10),
+                    borderRadius: br(5),
                     backgroundColor: phase === "pickup" ? "#4CAF50" : "#9E9E9E",
                   }}
                 />
@@ -735,9 +749,9 @@ const CourierTrackingView = () => {
           >
             <View
               style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
+                width: ms(32),
+                height: ms(32),
+                borderRadius: br(16),
                 backgroundColor:
                   phase === "delivery"
                     ? "rgba(244, 67, 54, 0.2)"
@@ -748,9 +762,9 @@ const CourierTrackingView = () => {
             >
               <View
                 style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 11,
+                  width: ms(22),
+                  height: ms(22),
+                  borderRadius: br(11),
                   backgroundColor: "white",
                   justifyContent: "center",
                   alignItems: "center",
@@ -760,9 +774,9 @@ const CourierTrackingView = () => {
               >
                 <View
                   style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
+                    width: ms(10),
+                    height: ms(10),
+                    borderRadius: br(5),
                     backgroundColor:
                       phase === "delivery" ? "#F44336" : "#9E9E9E",
                   }}
@@ -798,12 +812,12 @@ const CourierTrackingView = () => {
           }}
           style={{
             position: "absolute",
-            top: 20,
-            right: 16,
+            top: sp(20),
+            right: sp(16),
             backgroundColor: "white",
-            width: 44,
-            height: 44,
-            borderRadius: 22,
+            width: ms(44),
+            height: ms(44),
+            borderRadius: br(22),
             justifyContent: "center",
             alignItems: "center",
             shadowColor: "#000",
@@ -814,7 +828,7 @@ const CourierTrackingView = () => {
             zIndex: 10,
           }}
         >
-          <Ionicons name="locate" size={24} color="#545EE1" />
+          <Ionicons name="locate" size={iconSize(24)} color="#545EE1" />
         </TouchableOpacity>
       </View>
 
@@ -827,9 +841,9 @@ const CourierTrackingView = () => {
           bottom: 0,
           height: animatedHeight,
           backgroundColor: "#fff",
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          padding: 16,
+          borderTopLeftRadius: br(20),
+          borderTopRightRadius: br(20),
+          padding: sp(16),
           shadowColor: "#000",
           shadowOpacity: 0.15,
           shadowRadius: 8,
@@ -838,14 +852,14 @@ const CourierTrackingView = () => {
         {...panResponder.panHandlers}
       >
         {/* Handle bar */}
-        <View style={{ alignItems: "center", marginBottom: 10 }}>
+        <View style={{ alignItems: "center", marginBottom: sp(10) }}>
           <View
             style={{
-              width: 40,
-              height: 5,
+              width: wp(12),
+              height: hp(0.6),
               backgroundColor: "#ccc",
-              borderRadius: 3,
-              marginBottom: 6,
+              borderRadius: br(3),
+              marginBottom: sp(6),
             }}
           />
         </View>
@@ -853,7 +867,7 @@ const CourierTrackingView = () => {
         {/* Delivery info */}
         <View>
           {/* Delivery Info Section */}
-          <View style={{ flexDirection: "column", gap: 10 }}>
+          <View style={{ flexDirection: "column", gap: sp(10) }}>
             {/* Row: Icon + Name */}
             <View
               style={{
@@ -865,12 +879,12 @@ const CourierTrackingView = () => {
               {/* Left section: Icon + Name */}
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 <DeliverProfileIcon
-                  width={26}
-                  height={24}
-                  style={{ marginRight: 10 }}
+                  width={iconSize(26)}
+                  height={iconSize(24)}
+                  style={{ marginRight: sp(10) }}
                 />
                 <Text
-                  style={{ fontWeight: "700", fontSize: 18, color: "#111" }}
+                  style={{ fontWeight: "700", fontSize: fp(16), color: "#111" }}
                 >
                   {`${customerInfo?.firstName ?? ""} ${
                     customerInfo?.middleName
@@ -886,9 +900,10 @@ const CourierTrackingView = () => {
                   navigator.navigate("MessagePage");
                 }}
                 title="Message"
-                width={85}
-                height={30}
-                borderRadius={20}
+                width={ms(85)}
+                height={ms(30)}
+                borderRadius={br(20)}
+                fontSize={fp(12)}
                 backgroundColor="#545EE1"
                 textColor="white"
               />
@@ -897,22 +912,22 @@ const CourierTrackingView = () => {
             {/* Row: Icon + Delivery Details */}
             <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
               <LocationVioletIcon
-                width={26}
-                height={24}
-                style={{ marginRight: 10, marginTop: 2 }}
+                width={iconSize(26)}
+                height={iconSize(24)}
+                style={{ marginRight: sp(10), marginTop: sp(2) }}
               />
               <View style={{ flex: 1 }}>
                 <Text
-                  style={{ color: "#777", fontSize: 15, fontWeight: "500" }}
+                  style={{ color: "#777", fontSize: fp(15), fontWeight: "500" }}
                 >
                   Delivery
                 </Text>
                 <Text
                   style={{
                     color: "#555",
-                    fontSize: 14,
-                    lineHeight: 20,
-                    marginTop: 2,
+                    fontSize: fp(14),
+                    lineHeight: fp(20),
+                    marginTop: sp(2),
                   }}
                 >
                   {phase === "pickup"
@@ -928,15 +943,15 @@ const CourierTrackingView = () => {
           {expanded && (
             <>
               {phase === "pickup" && (
-                <View style={{ marginTop: 10 }}>
+                <View style={{ marginTop: sp(10) }}>
                   <TouchableOpacity
                     onPress={handlePickedUp}
                     disabled={!isNearPickup}
                     style={{
                       backgroundColor: isNearPickup ? "#4CAF50" : "#ccc",
-                      paddingVertical: 14,
-                      paddingHorizontal: 24,
-                      borderRadius: 12,
+                      paddingVertical: sp(14),
+                      paddingHorizontal: sp(24),
+                      borderRadius: br(12),
                       alignItems: "center",
                       justifyContent: "center",
                       width: "100%",
@@ -946,7 +961,7 @@ const CourierTrackingView = () => {
                       style={{
                         color: "white",
                         fontWeight: "700",
-                        fontSize: 16,
+                        fontSize: fp(16),
                       }}
                     >
                       {isNearPickup
@@ -958,11 +973,11 @@ const CourierTrackingView = () => {
               )}
               <View
                 style={{
-                  marginTop: 15,
+                  marginTop: sp(15),
                   borderTopWidth: 1,
                   borderColor: "#ddd",
-                  paddingTop: 15,
-                  gap: 20,
+                  paddingTop: sp(15),
+                  gap: sp(20),
                 }}
               >
                 <View>
@@ -973,22 +988,27 @@ const CourierTrackingView = () => {
                       justifyContent: "space-between",
                     }}
                   >
-                    <View style={{ flexDirection: "column", marginBottom: 10 }}>
+                    <View
+                      style={{ flexDirection: "column", marginBottom: sp(10) }}
+                    >
                       <View
                         style={{
                           flexDirection: "row",
                           alignItems: "center",
                         }}
                       >
-                        <View style={{ marginRight: 8 }}>
-                          <PickIcon width={20} height={20} />
+                        <View style={{ marginRight: sp(8) }}>
+                          <PickIcon
+                            width={iconSize(20)}
+                            height={iconSize(20)}
+                          />
                         </View>
 
                         <Text
                           style={{
                             fontWeight: "700",
-                            fontSize: 18,
-                            paddingVertical: 5,
+                            fontSize: fp(18),
+                            paddingVertical: sp(5),
                           }}
                         >
                           Buy
@@ -998,8 +1018,9 @@ const CourierTrackingView = () => {
                       <Text
                         style={{
                           color: "#555",
-                          marginLeft: 28,
+                          marginLeft: sp(28),
                           maxWidth: "75%",
+                          fontSize: fp(14),
                         }}
                       >
                         {activeOrder?.deliveryDetailsDTO?.destinationAddress}
@@ -1009,19 +1030,20 @@ const CourierTrackingView = () => {
                     <View
                       style={{
                         flexDirection: "column",
-                        marginBottom: 10,
-                        marginRight: 15,
+                        marginBottom: sp(10),
+                        marginRight: sp(15),
                       }}
                     >
                       <Text
                         style={{
                           fontWeight: "700",
-                          paddingVertical: 5,
+                          paddingVertical: sp(5),
+                          fontSize: fp(14),
                         }}
                       >
                         Order No.
                       </Text>
-                      <Text style={{ color: "#555" }}>
+                      <Text style={{ color: "#555", fontSize: fp(14) }}>
                         #{activeOrder?.orderIdPK}
                       </Text>
                     </View>
@@ -1031,13 +1053,15 @@ const CourierTrackingView = () => {
                     style={{
                       borderWidth: 1,
                       borderColor: "#154D71",
-                      borderRadius: 8,
-                      padding: 8,
-                      marginTop: 6,
-                      gap: 10,
+                      borderRadius: br(8),
+                      padding: sp(8),
+                      marginTop: sp(6),
+                      gap: sp(10),
                     }}
                   >
-                    <Text>{activeOrder?.request}</Text>
+                    <Text style={{ fontSize: fp(14) }}>
+                      {activeOrder?.request}
+                    </Text>
                   </View>
                 </View>
 
@@ -1045,8 +1069,8 @@ const CourierTrackingView = () => {
                   <Text
                     style={{
                       fontWeight: "700",
-                      fontSize: 18,
-                      paddingVertical: 5,
+                      fontSize: fp(18),
+                      paddingVertical: sp(5),
                     }}
                   >
                     Delivery Instructions:
@@ -1055,12 +1079,12 @@ const CourierTrackingView = () => {
                     style={{
                       borderWidth: 1,
                       borderColor: "#154D71",
-                      borderRadius: 8,
-                      padding: 8,
-                      marginTop: 6,
+                      borderRadius: br(8),
+                      padding: sp(8),
+                      marginTop: sp(6),
                     }}
                   >
-                    <Text>
+                    <Text style={{ fontSize: fp(14) }}>
                       {activeOrder?.deliveryDetailsDTO?.deliveryNotes}
                     </Text>
                   </View>
@@ -1071,32 +1095,38 @@ const CourierTrackingView = () => {
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      marginTop: 6,
-                      paddingVertical: 5,
+                      marginTop: sp(6),
+                      paddingVertical: sp(5),
                     }}
                   >
-                    <Text style={{ fontWeight: "600", fontSize: 18 }}>
+                    <Text style={{ fontWeight: "600", fontSize: fp(18) }}>
                       Delivery Fee:
                     </Text>
                     <View
                       style={{
                         borderWidth: 1,
                         borderColor: "#aaa",
-                        paddingHorizontal: 8,
-                        marginLeft: 5,
-                        height: 25,
+                        paddingHorizontal: sp(8),
+                        marginLeft: sp(5),
+                        height: ms(25),
                         justifyContent: "center",
-                        marginRight: 5,
+                        marginRight: sp(5),
                       }}
                     >
-                      <Text style={{ fontWeight: "600" }}>
+                      <Text style={{ fontWeight: "600", fontSize: fp(14) }}>
                         {activeOrder?.paymentsResponseDTO?.deliveryFee}
                       </Text>
                     </View>
                   </View>
                   {phase === "pickup" ? (
                     <>
-                      <Text style={{ color: "#555", marginBottom: -10 }}>
+                      <Text
+                        style={{
+                          color: "#555",
+                          marginBottom: sp(30),
+                          fontSize: fp(12),
+                        }}
+                      >
                         {isPaymentConfirmed
                           ? "Cannot cancel after payment is confirmed"
                           : "Note: You only have 10 minutes to cancel the delivery"}
@@ -1114,9 +1144,10 @@ const CourierTrackingView = () => {
                             }
                           }}
                           title="Cancel Order"
-                          width={"80%"}
-                          height={"40%"}
-                          borderRadius={20}
+                          width={wp(70)}
+                          height={hp(5)}
+                          borderRadius={br(20)}
+                          fontSize={fp(14)}
                           backgroundColor={
                             isPaymentConfirmed ? "#A0A0A0" : "#545EE1"
                           }
@@ -1130,7 +1161,7 @@ const CourierTrackingView = () => {
                       style={{
                         justifyContent: "center",
                         alignItems: "center",
-                        marginTop: 10,
+                        marginTop: sp(10),
                       }}
                     >
                       <Button
@@ -1141,19 +1172,16 @@ const CourierTrackingView = () => {
                               activeOrder.orderIdPK,
                               Status.DELIVERED
                             );
-                            await updateOrderById(
-                              activeOrder.orderIdPK,
-                              Status.WATING_FOR_REVIEW
-                            );
                             setIsDelivered(true);
                           } catch (err) {
                             console.error(err);
                           }
                         }}
                         title="Finish Order"
-                        width={"80%"}
-                        height={"40%"}
-                        borderRadius={20}
+                        width={wp(70)}
+                        height={hp(5)}
+                        borderRadius={br(20)}
+                        fontSize={fp(14)}
                         backgroundColor="#4CAF50"
                         textColor="white"
                       />
