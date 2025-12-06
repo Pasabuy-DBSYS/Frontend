@@ -81,12 +81,6 @@ export const useNotificationHubStore = create<NotificationHubState>(
           .configureLogging(signalR.LogLevel.Warning)
           .build();
 
-        conn.invoke(`JoinUserGroup`, user?.userIdPK);
-        conn.on("ReceiveNotification", (notification) => {
-          // Add notification to Zustand store
-          useNotificationStore.getState().addNotification(notification);
-        });
-
         // Reconnected => rebind handlers and rejoin user group
         conn.onreconnected(async () => {
           console.log("🔄 Reconnected to NotificationHub");
@@ -98,18 +92,6 @@ export const useNotificationHubStore = create<NotificationHubState>(
             conn!.off(event);
             conn!.on(event, callback);
           });
-
-          // Rejoin user group
-          if (currentState.userGroupId) {
-            try {
-              console.log(
-                `  ↪ Rejoining user group: ${currentState.userGroupId}`
-              );
-              await conn!.invoke("JoinUserGroup", currentState.userGroupId);
-            } catch (err) {
-              console.error("Failed to rejoin user group:", err);
-            }
-          }
 
           set({ isReady: true });
         });
@@ -124,9 +106,32 @@ export const useNotificationHubStore = create<NotificationHubState>(
           set({ isReady: false, connection: null, isConnecting: false });
         });
 
+        conn.on("ReceiveNotification", (notification) => {
+          try {
+            useNotificationStore.getState().addNotification(notification);
+            console.log(
+              `UNREAD NOTIFICATIONS ${
+                useNotificationStore.getState().unreadCount
+              }`
+            );
+          } catch (error) {
+            console.error("Error in ReceiveNotification handler:", error);
+          }
+        });
+
         // Start connection
         await conn.start();
         console.log("🟢 NotificationHub connected");
+
+        // Join user group AFTER connection is established
+        if (user?.userIdPK) {
+          try {
+            await conn.invoke("JoinUserGroup", user.userIdPK);
+            set({ userGroupId: user.userIdPK });
+          } catch (err) {
+            console.error("Failed to join user group on init:", err);
+          }
+        }
 
         // Wait until fully connected
         let attempts = 0;

@@ -15,7 +15,6 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Button } from "@/components/Button";
-import { Role } from "@/types/types";
 import ExpandOrder from "@/components/svg/ExpandOrder";
 import { useActiveOrderStore } from "@/app/api/store/order_store";
 import { useAuthStore } from "@/app/api/store/auth_store";
@@ -100,8 +99,6 @@ const getProgressStep = (status: Status): number => {
     case Status.IN_TRANSIT:
       return 2;
     case Status.DELIVERED:
-    case Status.WATING_FOR_REVIEW:
-    case Status.REVIEWED:
       return 3;
     default:
       return 0;
@@ -113,40 +110,77 @@ const statusColorAndText: Record<number, { color: string; text: string }> = {
   [Status.ACCEPTED]: { color: "#C8E6C9", text: "Accepted" },
   [Status.PICKED_UP]: { color: "#B2EBF2", text: "Picked Up" },
   [Status.IN_TRANSIT]: { color: "#B2EBF2", text: "In Transit" },
-  [Status.DELIVERED]: { color: "#DCE775", text: "Delivered" },
-  [Status.WATING_FOR_REVIEW]: { color: "#DCE775", text: "Waiting for Review" },
-  [Status.REVIEWED]: { color: "#DCE775", text: "Reviewed" },
   [Status.CANCELLED]: { color: "#FC5862", text: "Cancelled" },
+};
+
+// Get dynamic status color and text for delivered orders based on review status
+const getStatusColorAndText = (
+  status: Status,
+  order: OrderResponseDTO,
+  isCourier: boolean
+): { color: string; text: string } => {
+  if (status === Status.DELIVERED) {
+    const hasReviewed = isCourier
+      ? order.isCourierReviewed
+      : order.isCustomerReviewed;
+
+    if (hasReviewed) {
+      return { color: "#4CAF50", text: "Reviewed" }; // Green for reviewed
+    } else {
+      return { color: "#DCE775", text: "Waiting for Review" }; // Yellow for waiting
+    }
+  }
+
+  return statusColorAndText[status] || { color: "#E0E0E0", text: "Unknown" };
 };
 
 const getTextColor = (status: Status): string => {
   return status === Status.CANCELLED ? "#FFFFFF" : "#000000";
 };
 
-const getText = (status: Status): string => {
-  switch (status) {
-    case Status.DELIVERED:
-    case Status.REVIEWED:
-      return "Successful Transaction";
-    case Status.WATING_FOR_REVIEW:
-      return "Waiting for Review";
-    case Status.IN_TRANSIT:
-    case Status.PENDING:
-    case Status.ACCEPTED:
-    case Status.PICKED_UP:
-      return "Upcoming Order";
-    case Status.CANCELLED:
-      return "Unsuccessful Transaction";
-    default:
-      return "Error";
+const getText = (
+  status: Status,
+  order: OrderResponseDTO,
+  isCourier: boolean
+): string => {
+  // Check if order is cancelled
+  if (status === Status.CANCELLED) {
+    return "Unsuccessful Transaction";
   }
+
+  // Check if order is still in progresfs
+  if (
+    status === Status.PENDING ||
+    status === Status.ACCEPTED ||
+    status === Status.PICKED_UP ||
+    status === Status.IN_TRANSIT
+  ) {
+    return "Upcoming Order";
+  }
+
+  // For delivered orders, check review status based on role
+  if (status === Status.DELIVERED) {
+    const hasReviewed = isCourier
+      ? order.isCourierReviewed
+      : order.isCustomerReviewed;
+
+    if (hasReviewed) {
+      return "Reviewed";
+    } else {
+      return "Waiting For Review";
+    }
+  }
+
+  return "Successful Transaction";
 };
 
-const getStatusTextColor = (status: Status): string => {
+const getStatusTextColor = (
+  status: Status,
+  order?: OrderResponseDTO,
+  isCourier?: boolean
+): string => {
   switch (status) {
     case Status.DELIVERED:
-    case Status.REVIEWED:
-    case Status.WATING_FOR_REVIEW:
       return "#4CAF50";
     case Status.IN_TRANSIT:
     case Status.ACCEPTED:
@@ -166,11 +200,9 @@ const OrderHistory = () => {
 
   const { activeOrder, setActiveOrder, setPendingReview } =
     useActiveOrderStore();
-  const { user } = useAuthStore();
+  const { user, isCourier } = useAuthStore();
   const { otherUser } = useOtherUserStore();
   const navigator = useNavigation<CourierTrackingViewNavProp>();
-
-  const isCourier = user?.currentRole === Role.COURIER;
 
   // Fetch orders from backend
   useEffect(() => {
@@ -181,8 +213,13 @@ const OrderHistory = () => {
           ? await getCourierOrderHistory()
           : await getCustomerOrderHistory();
 
-          
         setOrders(data);
+
+        console.log(
+          `FETCHED ORDERS ${
+            isCourier ? "Courier" : "Customer"
+          }: ${JSON.stringify(data)}`
+        );
       } catch (error) {
         console.error("Failed to fetch orders:", error);
       } finally {
@@ -556,7 +593,10 @@ const OrderHistory = () => {
                           backgroundColor:
                             item.status === Status.CANCELLED
                               ? "#FC5862"
-                              : item.status === Status.WATING_FOR_REVIEW
+                              : item.status === Status.DELIVERED &&
+                                !(isCourier
+                                  ? item.isCourierReviewed
+                                  : item.isCustomerReviewed)
                               ? "#FFD700"
                               : "#4CAF50",
                           justifyContent: "center",
@@ -569,7 +609,10 @@ const OrderHistory = () => {
                           name={
                             item.status === Status.CANCELLED
                               ? "close"
-                              : item.status === Status.WATING_FOR_REVIEW
+                              : item.status === Status.DELIVERED &&
+                                !(isCourier
+                                  ? item.isCourierReviewed
+                                  : item.isCustomerReviewed)
                               ? "star"
                               : "checkmark"
                           }
@@ -596,8 +639,11 @@ const OrderHistory = () => {
                     <View style={{ alignItems: "flex-end" }}>
                       <Text
                         style={{
-                          backgroundColor:
-                            statusColorAndText[item.status]?.color || "#E0E0E0",
+                          backgroundColor: getStatusColorAndText(
+                            item.status,
+                            item,
+                            isCourier
+                          ).color,
                           color: getTextColor(item.status),
                           borderRadius: 4,
                           paddingHorizontal: 10,
@@ -606,7 +652,10 @@ const OrderHistory = () => {
                           fontSize: 12,
                         }}
                       >
-                        {statusColorAndText[item.status]?.text || "Unknown"}
+                        {
+                          getStatusColorAndText(item.status, item, isCourier)
+                            .text
+                        }
                       </Text>
                       <Text
                         style={{ fontSize: 12, color: "#888", marginTop: 6 }}
@@ -730,7 +779,7 @@ const OrderHistory = () => {
                         style={{
                           alignItems: "center",
                           borderWidth: 1,
-                          borderColor: getStatusTextColor(item.status),
+                          borderColor: getStatusTextColor(item.status, item),
                           borderRadius: 20,
                           paddingVertical: 10,
                           marginTop: 10,
@@ -738,51 +787,57 @@ const OrderHistory = () => {
                       >
                         <Text
                           style={{
-                            color: getStatusTextColor(item.status),
+                            color: getStatusTextColor(item.status, item),
                             fontWeight: "900",
                           }}
                         >
-                          {getText(item.status)}
+                          {getText(item.status, item, isCourier)}
                         </Text>
                       </View>
 
-                      {/* Review Button for Waiting for Review */}
-                      {item.status === Status.WATING_FOR_REVIEW && (
-                        <TouchableOpacity
-                          onPress={() => {
-                            setPendingReview(true);
-                            navigator.reset({
-                              index: 0,
-                              routes: [
-                                {
-                                  name: "ReviewOrder",
-                                  params: {
-                                    orderId: item.orderIdPK,
-                                    courierId: item.courierId,
+                      {/* Review Button - Show if order is delivered and current user hasn't reviewed yet */}
+                      {item.status === Status.DELIVERED &&
+                        !(isCourier
+                          ? item.isCourierReviewed
+                          : item.isCustomerReviewed) && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              setPendingReview(true);
+                              navigator.reset({
+                                index: 0,
+                                routes: [
+                                  {
+                                    name: "ReviewOrder",
+                                    params: {
+                                      orderId: item.orderIdPK,
+                                      // Courier reviews customer, Customer reviews courier
+                                      revieweeId: isCourier
+                                        ? item.customerId
+                                        : item.courierId,
+                                    },
                                   },
-                                },
-                              ],
-                            });
-                          }}
-                          style={{
-                            backgroundColor: "#545EE1",
-                            borderRadius: 20,
-                            paddingVertical: 12,
-                            alignItems: "center",
-                            marginTop: 10,
-                          }}
-                        >
-                          <Text
+                                ],
+                              });
+                            }}
                             style={{
-                              color: "#fff",
-                              fontWeight: "600",
-                              fontSize: 14,
+                              backgroundColor: "#545EE1",
+                              borderRadius: 20,
+                              paddingVertical: 12,
+                              alignItems: "center",
+                              marginTop: 10,
                             }}
                           >
-                            Review Order
-                          </Text>
-                        </TouchableOpacity>
-                      )}
+                            <Text
+                              style={{
+                                color: "#fff",
+                                fontWeight: "600",
+                                fontSize: 14,
+                              }}
+                            >
+                              Review {isCourier ? "Customer" : "Courier"}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
                     </View>
                   )}
                 </TouchableOpacity>

@@ -3,4 +3,5 @@ export interface PostReviewRequestDTO {
   reviewedUserID: number;
   rating: number;
   comment: string;
+  isCourier: boolean;
 }

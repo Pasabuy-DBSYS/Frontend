@@ -6,7 +6,7 @@ import { UserResponseDTO } from "../dto/response/auth.response.dto";
 import { getCurrentProfile } from "../user";
 import { Coordinates } from "@/types/interfaces";
 
-interface DecodedToken {
+export interface DecodedToken {
   exp?: number;
   iat?: number;
   sub?: string;
@@ -17,9 +17,11 @@ interface AuthState {
   token: string | null;
   user: UserResponseDTO | null;
   isAuthenticated: boolean;
+  isCourier: boolean;
   login: (token: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  setIsCourier: (arg: boolean) => void;
   checkTokenValidity: () => boolean;
   refreshToken: (newToken: string) => Promise<void>;
 }
@@ -30,6 +32,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       isAuthenticated: false,
+      isCourier: false,
 
       login: async (token: string) => {
         const isExpired = (() => {
@@ -57,7 +60,8 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           const user = await getCurrentProfile();
-          set({ user });
+          const isCourier = user.currentRole === 1;
+          set({ user, isCourier });
         } catch (err) {
           console.error("Failed to fetch profile after login:", err);
         }
@@ -66,7 +70,12 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         try {
           // 1️⃣ Clear in-memory auth state
-          set({ token: null, user: null, isAuthenticated: false });
+          set({
+            token: null,
+            user: null,
+            isAuthenticated: false,
+            isCourier: false,
+          });
 
           await useAuthStore.persist.clearStorage();
 
@@ -88,7 +97,8 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           const user = await getCurrentProfile();
-          set({ user });
+          const isCourier = user.currentRole === 1;
+          set({ user, isCourier });
         } catch (err) {
           console.error("Failed to refresh user:", err);
         }
@@ -124,15 +134,29 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      setIsCourier: (arg: boolean) => {
+        set({ isCourier: arg });
+      },
+
       refreshToken: async (newToken: string) => {
+        console.log(
+          "🔄 Refreshing token with new value:",
+          newToken.substring(0, 20) + "..."
+        );
+
         // Set the new token in state
         set({ token: newToken, isAuthenticated: true });
 
         // Fetch updated user profile with new token
         try {
           const user = await getCurrentProfile();
-          set({ user });
-          console.log("✅ Token refreshed and user updated:", user.currentRole);
+          const isCourier = user.currentRole === 1;
+          set({ user, isCourier });
+          console.log("✅ Token refreshed and user updated:", {
+            role: user.currentRole,
+            isCourier,
+            userId: user.userIdPK,
+          });
         } catch (err) {
           console.error("Failed to fetch profile after token refresh:", err);
         }
@@ -145,6 +169,7 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
+        isCourier: state.isCourier,
       }),
     }
   )

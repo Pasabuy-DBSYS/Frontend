@@ -44,9 +44,10 @@ const InsuranceVerification = () => {
 
     if (!result.canceled) {
       const image = result.assets[0];
+      const fileName = image.fileName ?? `insurance_${Date.now()}.jpg`;
       const fileObj = {
         uri: image.uri,
-        name: image.fileName ?? "",
+        name: fileName,
         type: "image/png",
       };
 
@@ -73,7 +74,7 @@ const InsuranceVerification = () => {
       const image = result.assets[0];
       const fileObj = {
         uri: image.uri,
-        name: image.fileName ?? "",
+        name: image.fileName ?? "default_image_name.png",
         type: "image/png",
       };
 

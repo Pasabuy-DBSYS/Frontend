@@ -6,23 +6,6 @@ import { useAuthStore } from "./store/auth_store";
 import { Role } from "@/types/types";
 import { useOrdersHubStore } from "./store/orders_hub_store";
 
-export const getMimeType = (path: string): string => {
-  if (!path) return "application/octet-stream";
-
-  const extension = path.split(".").pop()?.toLowerCase();
-  switch (extension) {
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "png":
-      return "image/png";
-    case "heic":
-      return "image/heic";
-    default:
-      return "application/octet-stream";
-  }
-};
-
 const BASE_URL = `${API_BASE_URL}/Users`;
 /** Create User */
 export const createUser = async (
@@ -42,21 +25,21 @@ export const createUser = async (
     formData.append("FrontId", {
       uri: userRequest.frontId.uri,
       name: userRequest.frontId.name,
-      type: getMimeType(userRequest.frontId.name),
+      type: "image/jpeg",
     } as any);
   }
   if (userRequest.backId) {
     formData.append("BackId", {
       uri: userRequest.backId.uri,
       name: userRequest.backId.name,
-      type: getMimeType(userRequest.backId.name),
+      type: "image/jpeg",
     } as any);
   }
   if (userRequest.insurance) {
     formData.append("Insurance", {
       uri: userRequest.insurance.uri,
-      name: userRequest.insurance.name,
-      type: getMimeType(userRequest.insurance.name),
+      name: userRequest.insurance.name || "insurance.jpg",
+      type: "image/jpeg",
     } as any);
   }
 
@@ -190,8 +173,7 @@ export const changeRole = async (): Promise<ChangeRoleResponse> => {
 
     // Disconnect SignalR so it reconnects with the new token on navigation
     try {
-      const { disconnect } = useOrdersHubStore.getState();
-      await disconnect();
+      console.log(`[HUB] Joined ${targetRoleName}Group before disconnecting`);
       console.log(
         "[HUB] Disconnected - will reconnect with new role on navigation"
       );
@@ -199,8 +181,12 @@ export const changeRole = async (): Promise<ChangeRoleResponse> => {
       console.warn("SignalR disconnect failed (non-critical):", hubErr);
     }
 
+    const { initConnection, joinRoleGroup } = useOrdersHubStore.getState();
     const updatedUser = await getCurrentProfile();
     useAuthStore.setState({ user: updatedUser });
+    await joinRoleGroup(
+      user.currentRole === Role.COURIER ? "courier" : "customer"
+    );
 
     console.log("Refreshed user profile:", updatedUser);
 
@@ -311,7 +297,6 @@ export const sendEmailVerificationCode = async (
   try {
     const { token } = useAuthStore.getState();
 
-    console.log(`NIGGA: ${encodeURIComponent(newEmail)}`);
     await axios.get(
       `${API_BASE_URL}/VerificationCode/email/${encodeURIComponent(newEmail)}`,
       {
@@ -330,6 +315,61 @@ export const sendEmailVerificationCode = async (
     );
     throw new Error(
       err?.response?.data?.message || "Failed to send verification code"
+    );
+  }
+};
+
+/** Send email verification code for registration (no auth required) */
+export const sendRegistrationEmailCode = async (
+  email: string
+): Promise<void> => {
+  try {
+    await axios.get(
+      `${API_BASE_URL}/VerificationCode/email/${encodeURIComponent(email)}`,
+      {
+        headers: {
+          Accept: "application/json",
+        },
+      }
+    );
+
+    console.log("✅ Registration verification code sent to:", email);
+  } catch (err: any) {
+    console.error(
+      "❌ [sendRegistrationEmailCode] Request Failed:",
+      err?.response?.data || err.message
+    );
+    throw new Error(
+      err?.response?.data?.message || "Failed to send verification code"
+    );
+  }
+};
+
+/** Verify email code for registration (no auth required) */
+export const verifyRegistrationEmailCode = async (
+  email: string,
+  verificationCode: string
+): Promise<boolean> => {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/VerificationCode/email/verify`,
+      { email, verificationCode },
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log("✅ Registration email code verified successfully");
+    return response.data;
+  } catch (err: any) {
+    console.error(
+      "❌ [verifyRegistrationEmailCode] Request Failed:",
+      err?.response?.data || err.message
+    );
+    throw new Error(
+      err?.response?.data?.message || "Invalid verification code"
     );
   }
 };

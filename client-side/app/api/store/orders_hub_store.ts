@@ -35,6 +35,7 @@ export const useOrdersHubStore = create<OrdersHubState>((set, get) => ({
   initConnection: async () => {
     const state = get();
     const invokeHub = get().invokeHub;
+
     let conn = state.connection;
 
     // If already connected, return it
@@ -54,6 +55,7 @@ export const useOrdersHubStore = create<OrdersHubState>((set, get) => ({
 
     // Check if token is valid before attempting connection
     const { token, checkTokenValidity } = useAuthStore.getState();
+
     if (!token || !checkTokenValidity()) {
       console.warn("⚠️ Cannot init SignalR: No valid token");
       return null;
@@ -103,7 +105,8 @@ export const useOrdersHubStore = create<OrdersHubState>((set, get) => ({
                 ? "JoinCourierGroup"
                 : "JoinCustomerGroup";
             console.log(`  ↪ Rejoining role group: ${groupMethod}`);
-            await conn!.invoke(groupMethod);
+
+            if (conn) await conn.invoke(groupMethod);
           } catch (err) {
             console.error("Failed to rejoin role group:", err);
           }
@@ -165,8 +168,6 @@ export const useOrdersHubStore = create<OrdersHubState>((set, get) => ({
       role === "courier" ? "JoinCourierGroup" : "JoinCustomerGroup";
 
     try {
-      console.log(`📡 Joining ${groupMethod}...`);
-      await conn.invoke(groupMethod);
       set({ currentRoleGroup: role });
       console.log(`✅ Joined ${groupMethod}`);
     } catch (error) {

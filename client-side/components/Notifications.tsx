@@ -78,13 +78,6 @@ const formatNotificationTime = (dateString: string): string => {
   }
 };
 
-
-interface NotificationItemProps {
-  item: NotificationResponseDTO;
-  onMarkAsRead: (id: number) => void;
-  onDelete: (id: number) => void;
-}
-
 interface NotificationItemProps {
   item: NotificationResponseDTO;
   onMarkAsRead: (id: number) => void;
@@ -411,7 +404,9 @@ const Notifications: React.FC<NotificationsProps> = ({}) => {
           </View>
         ) : (
           <FlatList
-            data={notifications}
+            data={notifications
+              .sort((a, b) => a.notificationPkId - b.notificationPkId)
+              .reverse()}
             keyExtractor={(item) => item.notificationPkId.toString()}
             renderItem={renderNotification}
             showsVerticalScrollIndicator={false}

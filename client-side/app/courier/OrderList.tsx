@@ -35,6 +35,9 @@ import * as Location from "expo-location";
 import { AcceptOrderRequestDTO } from "../api/dto/request/order.request.dto";
 import { Coordinates } from "@/types/interfaces";
 import { useActiveOrderStore } from "../api/store/order_store";
+import { getUserById } from "../api/user";
+import { UserResponseDTO } from "../api/dto/response/auth.response.dto";
+import { Image } from "expo-image";
 
 if (
   Platform.OS === "android" &&
@@ -53,6 +56,9 @@ const OrderList = () => {
   const [location, setLocation] = useState<Coordinates | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isAccepting, setIsAccepting] = useState(false);
+  const [userProfiles, setUserProfiles] = useState<{
+    [key: number]: UserResponseDTO;
+  }>({});
 
   const { user } = useAuthStore();
 
@@ -203,9 +209,26 @@ const OrderList = () => {
     }
   };
 
-  const toggleExpand = (orderId: number, order: OrderResponseDTO) => {
+  const toggleExpand = async (orderId: number, order: OrderResponseDTO) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
+    const newExpandedId = expandedOrderId === orderId ? null : orderId;
+    setExpandedOrderId(newExpandedId);
+
+    // Fetch user profile if expanding and we don't have it yet
+    if (newExpandedId && !userProfiles[order.customerId]) {
+      try {
+        const userProfile = await getUserById(order.customerId);
+        if (userProfile) {
+          setUserProfiles((prev) => ({
+            ...prev,
+            [order.customerId]: userProfile,
+          }));
+        }
+      } catch (error) {
+        console.error("Failed to fetch user profile:", error);
+      }
+    }
+
     console.log(`Order details: ${JSON.stringify(order)}`);
   };
 
@@ -317,165 +340,263 @@ const OrderList = () => {
 
                   {/* Expanded Content */}
                   {isExpanded && (
-                    <View
-                      style={{
-                        marginTop: 15,
-                        borderTopWidth: 1,
-                        borderColor: "#ddd",
-                        paddingTop: 15,
-                        gap: 20,
-                      }}
-                    >
-                      <View>
-                        <View
-                          style={{ flexDirection: "column", marginBottom: 10 }}
-                        >
+                    <>
+                      <View
+                        style={{
+                          marginTop: 15,
+                          borderTopWidth: 1,
+                          borderColor: "#ddd",
+                          paddingTop: 15,
+                          gap: 20,
+                        }}
+                      >
+                        {/* User Information */}
+                        {userProfiles[item.customerId] && (
                           <View
                             style={{
                               flexDirection: "row",
                               alignItems: "center",
+                              justifyContent: "space-between",
                             }}
                           >
-                            <View style={{ marginRight: 8 }}>
-                              <PickIcon width={20} height={20} />
-                            </View>
-
-                            <Text
+                            <View
                               style={{
-                                fontWeight: "700",
-                                fontSize: 18,
-                                paddingVertical: 5,
+                                flexDirection: "row",
+                                alignItems: "center",
                               }}
                             >
-                              Buy
-                            </Text>
+                              <View
+                                style={{
+                                  width: 40,
+                                  height: 40,
+                                  borderRadius: 20,
+                                  justifyContent: "center",
+                                  alignItems: "center",
+                                  marginRight: 12,
+                                }}
+                              >
+                                <Image
+                                  source={{
+                                    uri: `https://pasabuyres.s3.ap-southeast-2.amazonaws.com/${
+                                      userProfiles[item.customerId]
+                                        .profilePictureKey
+                                    }`,
+                                  }}
+                                  style={{
+                                    width: 44,
+                                    height: 44,
+                                    borderRadius: 22,
+                                  }}
+                                />
+                              </View>
+                              <View>
+                                <Text
+                                  style={{
+                                    fontSize: 16,
+                                    fontWeight: "600",
+                                    color: "#333",
+                                  }}
+                                >
+                                  {userProfiles[item.customerId].firstName}{" "}
+                                  {userProfiles[item.customerId].lastName}
+                                </Text>
+                                <View
+                                  style={{
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 14, color: "#666" }}>
+                                    Rating:{" "}
+                                  </Text>
+                                  <Text
+                                    style={{
+                                      fontSize: 14,
+                                      fontWeight: "600",
+                                      color: "#545EE1",
+                                    }}
+                                  >
+                                    {
+                                      userProfiles[item.customerId]
+                                        .ratingAverage
+                                    }
+                                    ⭐
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
                           </View>
-
-                          <Text style={{ color: "#555", marginLeft: 28 }}>
-                            {item.deliveryDetailsDTO?.destinationAddress}
-                          </Text>
-                        </View>
-
-                        <View
-                          style={{
-                            borderWidth: 1,
-                            borderColor: "#154D71",
-                            borderRadius: 8,
-                            padding: 8,
-                            marginTop: 6,
-                            gap: 10,
-                          }}
-                        >
-                          <Text> {item.request}</Text>
-                        </View>
+                        )}
                       </View>
-
-                      <View>
-                        <Text
-                          style={{
-                            fontWeight: "700",
-                            fontSize: 18,
-                            paddingVertical: 5,
-                          }}
-                        >
-                          Delivery Instructions:
-                        </Text>
-                        <View
-                          style={{
-                            borderWidth: 1,
-                            borderColor: "#154D71",
-                            borderRadius: 8,
-                            padding: 8,
-                            marginTop: 6,
-                          }}
-                        >
-                          <Text>{item.deliveryDetailsDTO?.deliveryNotes}</Text>
-                        </View>
-                      </View>
-
-                      <View>
-                        <View
-                          style={{ flexDirection: "column", marginBottom: 10 }}
-                        >
-                          {/* Row: Icon + Label */}
+                      <View
+                        style={{
+                          marginTop: 15,
+                          borderTopWidth: 1,
+                          borderColor: "#ddd",
+                          paddingTop: 15,
+                          gap: 20,
+                        }}
+                      >
+                        <View>
                           <View
                             style={{
-                              flexDirection: "row",
-                              alignItems: "center",
+                              flexDirection: "column",
+                              marginBottom: 10,
                             }}
                           >
-                            <View style={{ marginRight: 8 }}>
-                              <LocationBlueIcon width={20} height={20} />
-                            </View>
-
-                            <Text
+                            <View
                               style={{
-                                fontWeight: "700",
-                                fontSize: 18,
-                                paddingVertical: 5,
+                                flexDirection: "row",
+                                alignItems: "center",
                               }}
                             >
-                              Delivery
+                              <View style={{ marginRight: 8 }}>
+                                <PickIcon width={20} height={20} />
+                              </View>
+
+                              <Text
+                                style={{
+                                  fontWeight: "700",
+                                  fontSize: 18,
+                                  paddingVertical: 5,
+                                }}
+                              >
+                                Buy
+                              </Text>
+                            </View>
+
+                            <Text style={{ color: "#555", marginLeft: 28 }}>
+                              {item.deliveryDetailsDTO?.destinationAddress}
                             </Text>
                           </View>
 
-                          {/* Delivery Location */}
+                          <View
+                            style={{
+                              borderWidth: 1,
+                              borderColor: "#154D71",
+                              borderRadius: 8,
+                              padding: 8,
+                              marginTop: 6,
+                              gap: 10,
+                            }}
+                          >
+                            <Text> {item.request}</Text>
+                          </View>
+                        </View>
+
+                        <View>
                           <Text
                             style={{
-                              color: "#555",
-                              marginLeft: 28, // aligns text under label
-                              lineHeight: 20,
+                              fontWeight: "700",
+                              fontSize: 18,
+                              paddingVertical: 5,
                             }}
                           >
-                            {item.deliveryDetailsDTO?.customerAddress}
-                          </Text>
-                        </View>
-
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            marginTop: 6,
-                            paddingVertical: 5,
-                          }}
-                        >
-                          <Text style={{ fontWeight: "600", fontSize: 18 }}>
-                            Delivery Fee:
+                            Delivery Instructions:
                           </Text>
                           <View
                             style={{
                               borderWidth: 1,
-                              borderColor: "#aaa",
-                              paddingHorizontal: 8,
-                              marginLeft: 5,
-                              height: 25,
-                              justifyContent: "center",
-                              marginRight: 5,
+                              borderColor: "#154D71",
+                              borderRadius: 8,
+                              padding: 8,
+                              marginTop: 6,
                             }}
                           >
-                            <Text style={{ fontWeight: "600" }}>
-                              {item.paymentsResponseDTO?.deliveryFee}
+                            <Text>
+                              {item.deliveryDetailsDTO?.deliveryNotes}
                             </Text>
                           </View>
                         </View>
-                      </View>
 
-                      <View style={{ alignItems: "center", marginTop: 10 }}>
-                        <Button
-                          onPress={() => {
-                            onConfirmPickup(item.orderIdPK);
-                          }}
-                          textColor="white"
-                          fontWeight="bold"
-                          fontSize={17}
-                          title="Confirm pickup"
-                          height={50}
-                          width="90%"
-                          borderRadius={30}
-                          backgroundColor="#545EE1"
-                        />
+                        <View>
+                          <View
+                            style={{
+                              flexDirection: "column",
+                              marginBottom: 10,
+                            }}
+                          >
+                            {/* Row: Icon + Label */}
+                            <View
+                              style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                              }}
+                            >
+                              <View style={{ marginRight: 8 }}>
+                                <LocationBlueIcon width={20} height={20} />
+                              </View>
+
+                              <Text
+                                style={{
+                                  fontWeight: "700",
+                                  fontSize: 18,
+                                  paddingVertical: 5,
+                                }}
+                              >
+                                Delivery
+                              </Text>
+                            </View>
+
+                            {/* Delivery Location */}
+                            <Text
+                              style={{
+                                color: "#555",
+                                marginLeft: 28, // aligns text under label
+                                lineHeight: 20,
+                              }}
+                            >
+                              {item.deliveryDetailsDTO?.customerAddress}
+                            </Text>
+                          </View>
+
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              marginTop: 6,
+                              paddingVertical: 5,
+                            }}
+                          >
+                            <Text style={{ fontWeight: "600", fontSize: 18 }}>
+                              Delivery Fee:
+                            </Text>
+                            <View
+                              style={{
+                                borderWidth: 1,
+                                borderColor: "#aaa",
+                                paddingHorizontal: 8,
+                                marginLeft: 5,
+                                height: 25,
+                                justifyContent: "center",
+                                marginRight: 5,
+                              }}
+                            >
+                              <Text style={{ fontWeight: "600" }}>
+                                {item.paymentsResponseDTO?.deliveryFee}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        <View style={{ alignItems: "center", marginTop: 10 }}>
+                          <Button
+                            onPress={() => {
+                              onConfirmPickup(item.orderIdPK);
+                            }}
+                            textColor="white"
+                            fontWeight="bold"
+                            fontSize={17}
+                            title="Confirm pickup"
+                            height={50}
+                            width="90%"
+                            borderRadius={30}
+                            backgroundColor="#545EE1"
+                          />
+                        </View>
                       </View>
-                    </View>
+                    </>
                   )}
                 </TouchableOpacity>
               );

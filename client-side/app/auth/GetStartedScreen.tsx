@@ -8,16 +8,6 @@ const GetStartedScreen = () => {
   const { width, height } = Dimensions.get("window");
   const navigation = useNavigation();
 
-  const fetchOrders = async () => {
-    try {
-      const orders = await getOrders();
-      console.log("Fetched Orders:", orders);
-    } catch (error) {
-      console.error("Error fetching orders:", error);
-      throw error;
-    }
-  };
-
   return (
     <View
       style={{
@@ -72,7 +62,6 @@ const GetStartedScreen = () => {
           <Button
             title="Get Started"
             onPress={() => {
-              fetchOrders();
               navigation.navigate("Welcome" as never);
             }}
             backgroundColor="#fff"

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,11 @@ import { useAuthStore } from "../api/store/auth_store";
 import { useActiveOrderStore } from "../api/store/order_store";
 import { useOrdersHubStore } from "../api/store/orders_hub_store";
 import { Status } from "../api/dto/response/order.response.dto";
+import { useNotificationStore } from "../api/store/notification_store";
+import { useNotificationHubStore } from "../api/store/notification_hub_store";
+import { StatisticsResponseCourierDTO } from "../api/dto/response/statistics.response.dto";
+import { getStatisticsAsCourier } from "../api/statistics";
+import { Role } from "@/types/types";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -28,8 +33,11 @@ interface CourierHomeProps {
 const CourierHome = ({ setActiveTab }: CourierHomeProps) => {
   const [toggleModal, setToggleModal] = useState<boolean>(false);
   const navigator = useNavigation();
-  const { user } = useAuthStore();
+  const { user, isCourier } = useAuthStore();
   const { activeOrder } = useActiveOrderStore();
+  const { unreadCount } = useNotificationStore();
+  const { initConnection } = useNotificationHubStore();
+  const [statistics, setStatistics] = useState<StatisticsResponseCourierDTO>();
 
   const switchRole = () => {
     if (activeOrder) {
@@ -37,7 +45,18 @@ const CourierHome = ({ setActiveTab }: CourierHomeProps) => {
     }
     setToggleModal(true);
   };
+  useEffect(() => {
+    const fetchStatistics = async () => {
+      const response = await getStatisticsAsCourier();
 
+      if (response) {
+        setStatistics(response);
+        console.log(`STATISTICS COURIER SIDE: ${JSON.stringify(response)}`);
+      }
+    };
+
+    if (isCourier) fetchStatistics();
+  }, [isCourier]); // Re-fetch when role changes
   const switchRolePersist = async () => {
     try {
       console.log(`OLD TOKEN: ${useAuthStore.getState().token}`);
@@ -48,16 +67,28 @@ const CourierHome = ({ setActiveTab }: CourierHomeProps) => {
       // 2. If we got a new token, ensure it's set
       if (newToken && typeof newToken === "string") {
         await useAuthStore.getState().refreshToken(newToken);
+        // Wait a bit to ensure token is fully updated
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
+
       console.log(`NEW TOKEN: ${newToken ? "✅ received" : "❌ missing"}`);
 
+      const newRole =
+        user?.currentRole ?? useAuthStore.getState().user?.currentRole;
+
       // 3. Disconnect and rejoin with new role
-      const { disconnect, initConnection, invokeHub } =
+      const { disconnect, initConnection, joinRoleGroup } =
         useOrdersHubStore.getState();
-      await disconnect();
-      await initConnection();
-      await invokeHub("JoinCustomerGroup");
-      console.log("[SWITCH] Joined CustomerGroup");
+
+      const connection = await initConnection();
+      if (!connection) {
+        throw new Error("Failed to initialize hub connection with new token");
+      }
+
+      // 5. Join the correct group based on the new role using the proper method
+      const roleGroup = newRole === Role.CUSTOMER ? "customer" : "courier";
+      await joinRoleGroup(roleGroup);
+      console.log(`[SWITCH] Joined ${roleGroup} group`);
 
       // 4. Rehydrate active order for the NEW role
       await useActiveOrderStore.getState().rehydrateActiveOrder();
@@ -72,6 +103,18 @@ const CourierHome = ({ setActiveTab }: CourierHomeProps) => {
     if (hour < 18) return "Good Afternoon";
     return "Good Evening";
   };
+
+  useEffect(() => {
+    // Initialize notification hub
+    const initNotificationHub = async () => {
+      try {
+        await initConnection();
+      } catch (error) {
+        console.error("Failed to initialize notification hub:", error);
+      }
+    };
+    initNotificationHub();
+  }, [initConnection]);
 
   return (
     <LinearGradient
@@ -123,13 +166,42 @@ const CourierHome = ({ setActiveTab }: CourierHomeProps) => {
                   backgroundColor: "#F5F5F5",
                   justifyContent: "center",
                   alignItems: "center",
+                  position: "relative",
                 }}
+                onPress={() => setActiveTab?.(1)}
               >
                 <Ionicons
                   name="notifications-outline"
                   size={24}
                   color="#545EE1"
                 />
+                {unreadCount > 0 && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -4,
+                      right: -4,
+                      backgroundColor: "#F44336",
+                      borderRadius: 12,
+                      width: 24,
+                      height: 24,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      borderWidth: 2,
+                      borderColor: "#fff",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "#fff",
+                        fontSize: 11,
+                        fontWeight: "700",
+                      }}
+                    >
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -407,7 +479,7 @@ const CourierHome = ({ setActiveTab }: CourierHomeProps) => {
                   <Text
                     style={{ fontSize: 24, fontWeight: "bold", color: "#333" }}
                   >
-                    48
+                    {statistics?.totalDeliveries}
                   </Text>
                   <Text style={{ fontSize: 12, color: "#888" }}>
                     Deliveries
@@ -439,7 +511,7 @@ const CourierHome = ({ setActiveTab }: CourierHomeProps) => {
                   <Text
                     style={{ fontSize: 24, fontWeight: "bold", color: "#333" }}
                   >
-                    ₱2,450
+                    ₱{statistics?.totalEarnings}
                   </Text>
                   <Text style={{ fontSize: 12, color: "#888" }}>Earnings</Text>
                 </View>
@@ -469,7 +541,7 @@ const CourierHome = ({ setActiveTab }: CourierHomeProps) => {
                   <Text
                     style={{ fontSize: 24, fontWeight: "bold", color: "#333" }}
                   >
-                    4.9
+                    {statistics?.rating}
                   </Text>
                   <Text style={{ fontSize: 12, color: "#888" }}>Rating</Text>
                 </View>

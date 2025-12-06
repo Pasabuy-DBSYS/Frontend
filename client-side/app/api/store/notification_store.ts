@@ -38,6 +38,16 @@ export const useNotificationStore = create<NotificationState>()(
 
       addNotification: (notification) => {
         const currentNotifications = get().notifications;
+        // Check if notification already exists
+        const exists = currentNotifications.some(
+          (n) => n.notificationPkId === notification.notificationPkId
+        );
+        if (exists) {
+          console.log(
+            `Notification ${notification.notificationPkId} already exists, skipping duplicate`
+          );
+          return;
+        }
         // Add to the beginning of the list
         const updatedNotifications = [notification, ...currentNotifications];
         const unreadCount = updatedNotifications.filter(
