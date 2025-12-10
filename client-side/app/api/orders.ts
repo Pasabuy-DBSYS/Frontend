@@ -22,6 +22,7 @@ import { useRouteStore } from "./store/route_store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import { useOtherUserStore } from "./store/user_store";
+import { formatTimeHuman } from "../helper/helper";
 
 const BASE_URL = `${API_BASE_URL}/Orders`;
 
@@ -499,30 +500,68 @@ export const updateOrderById = async (orderId: number, orderStatus: Status) => {
   }
 };
 
-export const updateCourierLocation = async (
-  orderId: number,
-  latitude: number,
-  longitude: number
-): Promise<void> => {
+export const estimateDeliveryTime = async (
+  locationOne: Coordinates,
+  locationTwo: Coordinates
+) => {
   try {
-    const { token } = useAuthStore.getState();
-
-    await axios.patch(
-      `${BASE_URL}/update/courier-location/${orderId}?courierLatitude=${latitude}&courierLongitude=${longitude}`,
-      {},
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const url = `https://api.geoapify.com/v1/routematrix?apiKey=${GEOAPIFY_KEY}`;
 
     console.log(
-      `📍 [updateCourierLocation] Sent: Order ${orderId}, Lat: ${latitude}, Lng: ${longitude}`
+      `Estimating delivery time between ${JSON.stringify(
+        locationOne
+      )} and ${JSON.stringify(locationTwo)}`
     );
-  } catch (err: any) {
-    // Don't throw - location updates are non-critical
-    console.warn("⚠️ [updateCourierLocation] Failed:", err?.message);
+    const body = {
+      mode: "drive",
+      sources: [
+        {
+          location: [
+            Number(locationOne.longitude),
+            Number(locationOne.latitude),
+          ],
+        },
+      ],
+      targets: [
+        {
+          location: [
+            Number(locationTwo.longitude),
+            Number(locationTwo.latitude),
+          ],
+        },
+      ],
+    };
+
+    console.log(JSON.stringify({ url, body }, null, 2));
+
+    const res = await axios.post(url, body, {
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const timeSeconds = res.data?.sources_to_targets?.[0]?.[0]?.time;
+    const distance = res.data?.sources_to_targets?.[0]?.[0]?.distance;
+
+    console.log(
+      `TIME SECONDS: ${timeSeconds}, DISTANCE: ${distance}, FORMATTED: ${formatTimeHuman(
+        timeSeconds
+      )}`
+    );
+
+    if (!timeSeconds) return null;
+
+    const minutes = Math.round(timeSeconds / 60);
+
+    return {
+      minutes,
+      seconds: timeSeconds,
+      distance,
+      formattedTime: formatTimeHuman(timeSeconds),
+    };
+  } catch (err) {
+    console.error(
+      "❌ [estimateDeliveryTime] Error:",
+      (err as any).response?.data || err
+    );
+    throw err;
   }
 };

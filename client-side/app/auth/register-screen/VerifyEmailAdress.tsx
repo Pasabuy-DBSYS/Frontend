@@ -17,9 +17,12 @@ import AuthLeftButton from "@/components/svg/AuthLeftButton";
 import { useRegister } from "@/app/context/RegisterContext";
 import { RootNav } from "@/types/types";
 import {
+  checkEmailExist,
+  checkUsernameExist,
   sendRegistrationEmailCode,
   verifyRegistrationEmailCode,
 } from "@/app/api/user";
+import { user } from "@/constants/user";
 
 const VerifyEmailAdress: React.FC = () => {
   const navigation = useNavigation<RootNav>();
@@ -30,6 +33,8 @@ const VerifyEmailAdress: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [validUser, setValidUser] = useState(true);
+  const [existEmail, setExistEmail] = useState(false);
   const inputRefs = useRef<(TextInput | null)[]>([]);
   const { updateUserData } = useRegister();
 
@@ -51,11 +56,74 @@ const VerifyEmailAdress: React.FC = () => {
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+    return emailRegex.test(email) && !existEmail;
   };
+  useEffect(() => {
+    // Use a flag to prevent setting state if the component unmounts
+    let isMounted = true;
+
+    const checkUsername = async () => {
+      try {
+        const { exists } = await checkUsernameExist(username.trim());
+
+        // Only update state if the component is still mounted
+        if (isMounted) {
+          setValidUser(exists);
+          console.log("Username exists:", exists);
+        }
+      } catch (error) {
+        console.error("Error checking username:", error);
+        if (isMounted) {
+          setValidUser(false); // Handle error case
+        }
+      }
+    };
+
+    if (username.trim()) {
+      checkUsername();
+    } else {
+      setValidUser(false);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [username, setValidUser]);
+
+  useEffect(() => {
+    // Use a flag to prevent setting state if the component unmounts
+    let isMounted = true;
+
+    const checkEmail = async () => {
+      try {
+        const { exists } = await checkEmailExist(email.trim());
+
+        // Only update state if the component is still mounted
+        if (isMounted) {
+          setExistEmail(exists);
+          console.log("Email exists:", exists);
+        }
+      } catch (error) {
+        console.error("Error checking username:", error);
+        if (isMounted) {
+          setExistEmail(false); // Handle error case conservatively
+        }
+      }
+    };
+
+    if (email.trim()) {
+      checkEmail();
+    } else {
+      setExistEmail(false);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [email]);
 
   const validateUsername = (username: string) => {
-    return username.trim().length >= 3;
+    return username.trim().length >= 3 && !validUser;
   };
 
   const handleSendCode = async () => {
@@ -213,11 +281,14 @@ const VerifyEmailAdress: React.FC = () => {
                   flexDirection: "row",
                   alignItems: "center",
                   borderWidth: 1.5,
-                  borderColor: validateUsername(username)
-                    ? "#22C55E"
-                    : username
-                    ? "#E5E7EB"
-                    : "#E5E7EB",
+                  borderColor:
+                    username && validUser
+                      ? "#E53935" // Username exists -> red
+                      : validateUsername(username)
+                      ? "#22C55E"
+                      : username
+                      ? "#E5E7EB"
+                      : "#E5E7EB",
                   borderRadius: 12,
                   backgroundColor: "#FAFAFA",
                   paddingHorizontal: 16,
@@ -247,9 +318,15 @@ const VerifyEmailAdress: React.FC = () => {
                   <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
                 )}
               </View>
-              <Text style={{ fontSize: 12, color: "#999", marginTop: 6 }}>
-                At least 3 characters. This will be your login credential.
-              </Text>
+              {username && validUser ? (
+                <Text style={{ fontSize: 12, color: "#E53935", marginTop: 6 }}>
+                  Username already exists
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 12, color: "#999", marginTop: 6 }}>
+                  At least 3 characters. This will be your login credential.
+                </Text>
+              )}
             </View>
 
             {/* Email Input */}
@@ -269,11 +346,14 @@ const VerifyEmailAdress: React.FC = () => {
                   flexDirection: "row",
                   alignItems: "center",
                   borderWidth: 1.5,
-                  borderColor: validateEmail(email)
-                    ? "#22C55E"
-                    : email
-                    ? "#E5E7EB"
-                    : "#E5E7EB",
+                  borderColor:
+                    email && existEmail
+                      ? "#E53935" // Email already registered -> red
+                      : validateEmail(email)
+                      ? "#22C55E"
+                      : email
+                      ? "#E5E7EB"
+                      : "#E5E7EB",
                   borderRadius: 12,
                   backgroundColor: "#FAFAFA",
                   paddingHorizontal: 16,
@@ -304,9 +384,15 @@ const VerifyEmailAdress: React.FC = () => {
                   <Ionicons name="checkmark-circle" size={20} color="#22C55E" />
                 )}
               </View>
-              <Text style={{ fontSize: 12, color: "#999", marginTop: 6 }}>
-                We'll send a verification code to this email.
-              </Text>
+              {email && existEmail ? (
+                <Text style={{ fontSize: 12, color: "#E53935", marginTop: 6 }}>
+                  Email already registered
+                </Text>
+              ) : (
+                <Text style={{ fontSize: 12, color: "#999", marginTop: 6 }}>
+                  We'll send a verification code to this email.
+                </Text>
+              )}
             </View>
 
             {/* Send Code Button */}

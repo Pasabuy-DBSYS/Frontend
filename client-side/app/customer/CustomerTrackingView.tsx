@@ -33,6 +33,7 @@ import PickIcon from "@/components/svg/PickIcon";
 import ConfirmPickupModal from "@/components/modals/ConfirmDeliver";
 import CancelDeliver from "@/components/modals/CancelDeliver";
 import {
+  estimateDeliveryTime,
   getCurrentOrderAsCourier,
   getOrderById,
   postOrder,
@@ -80,6 +81,7 @@ const CustomerTrackingView = () => {
   const [expandedHeight, setExpandedHeight] = useState(hp(55)); // ~55% of screen height
   const animatedHeight = useRef(new Animated.Value(initialHeight)).current;
   const [disabledButton, setDisabledButton] = useState(false);
+  const [deliveryTime, setDeliveryTime] = useState<any>({});
   const {
     activeOrder,
     isCancelled,
@@ -93,8 +95,13 @@ const CustomerTrackingView = () => {
     setShowOrderAccepted,
     setPendingReview,
     resetModalStates,
+    setTrackCourierLocation,
+    trackCourierLocation,
   } = useActiveOrderStore();
 
+  useEffect(() => {
+    console.log(`DELIVERY TIME UPDATED: ${JSON.stringify(deliveryTime)}`);
+  }, [deliveryTime]);
   // Get payment to check if cancellation should be disabled
   const payment = usePaymentStore((state) => state.payment);
   const isPaymentConfirmed = payment?.isItemsFeeConfirmed === true;
@@ -106,14 +113,12 @@ const CustomerTrackingView = () => {
     latitude: activeOrder?.deliveryDetailsDTO?.locationLatitude ?? 0,
     longitude: activeOrder?.deliveryDetailsDTO?.locationLongitude ?? 0,
   };
-  const [trackCourierLocation, setTrackCourierLocation] =
-    useState<Coordinates | null>(null);
 
   // AnimatedRegion for smooth courier marker movement
   const courierAnimatedLocation = useRef(
     new AnimatedRegion({
-      latitude: 0,
-      longitude: 0,
+      latitude: activeOrder?.deliveryDetailsDTO?.locationLatitude,
+      longitude: activeOrder?.deliveryDetailsDTO?.locationLongitude,
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     })
@@ -123,15 +128,43 @@ const CustomerTrackingView = () => {
 
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Animated Region for smooth courier movement
+  // Animated Region for smooth courier movement - initialized with default values
   const pinnedLocationRef = useRef(
     new AnimatedRegion({
-      latitude: activeOrder?.deliveryDetailsDTO?.locationLatitude ?? 0,
-      longitude: activeOrder?.deliveryDetailsDTO?.locationLongitude ?? 0,
+      latitude: 0,
+      longitude: 0,
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     })
   ).current;
+
+  // Update pinnedLocationRef when activeOrder location changes
+  useEffect(() => {
+    if (!activeOrder?.deliveryDetailsDTO) return;
+
+    const latitude = activeOrder.deliveryDetailsDTO.locationLatitude;
+    const longitude = activeOrder.deliveryDetailsDTO.locationLongitude;
+
+    console.log(
+      `📍 [CUSTOMER] Updating pinned location to: ${latitude}, ${longitude}`
+    );
+
+    pinnedLocationRef
+      .timing({
+        latitude,
+        longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+        duration: 500,
+        useNativeDriver: false,
+      } as any)
+      .start();
+  }, [
+    activeOrder?.orderIdPK,
+    activeOrder?.deliveryDetailsDTO?.locationLatitude,
+    activeOrder?.deliveryDetailsDTO?.locationLongitude,
+  ]);
+
   const [destinationLocation, setDestinationLocation] = useState<Coordinates>();
 
   const [polylineCoords, setPolylineCoords] = useState<Coordinates[]>([]);
@@ -303,8 +336,8 @@ const CustomerTrackingView = () => {
         };
 
         setTrackCourierLocation({
-          latitude: courierCoords.latitude,
-          longitude: courierCoords.longitude,
+          latitude: activeOrder.deliveryDetailsDTO.courierLatitude,
+          longitude: activeOrder.deliveryDetailsDTO.courierLongitude,
         });
 
         // Save my location for the locate button
@@ -330,7 +363,9 @@ const CustomerTrackingView = () => {
 
   // Animate courier marker when trackCourierLocation changes
   useEffect(() => {
-    if (!trackCourierLocation) return;
+    if (!trackCourierLocation) {
+      return;
+    }
 
     // Animate to new position with spring animation
     courierAnimatedLocation
@@ -364,7 +399,7 @@ const CustomerTrackingView = () => {
         await invokeHub("JoinOrderGroup", activeOrder.orderIdPK);
 
         // Handler for courier location updates
-        addHandler("CourierLocationUpdated", (locationData: any) => {
+        addHandler("CourierLocationUpdated", async (locationData: any) => {
           console.log("📍 CourierLocationUpdated received:", locationData);
           setTrackCourierLocation({
             latitude: locationData.courierLatitude,
@@ -952,11 +987,7 @@ const CustomerTrackingView = () => {
                 >
                   <EditOrder height={iconSize(64)} width={iconSize(64)} />
                   {/* Disable cancel if payment is confirmed */}
-                  <TouchableOpacity
-                    onPress={() => !isPaymentConfirmed && setShowCancel(true)}
-                    disabled={isPaymentConfirmed}
-                    style={{ opacity: isPaymentConfirmed ? 0.4 : 1 }}
-                  >
+                  <TouchableOpacity onPress={() => setShowCancel(true)}>
                     <CancelOrder height={iconSize(64)} width={iconSize(64)} />
                   </TouchableOpacity>
                 </View>
@@ -1076,13 +1107,21 @@ const CustomerTrackingView = () => {
                   </Text>
                 </View>
 
-                <View style={{ flexDirection: "row", alignItems: "center", gap: sp(8) }}>
-                  <Ionicons
-                    name="star"
-                    size={16}
-                    color="#545EE1"
-                  />
-                  <Text style={{ fontSize: fp(12), color: "#545EE1", fontWeight: "600" }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: sp(8),
+                  }}
+                >
+                  <Ionicons name="star" size={16} color="#545EE1" />
+                  <Text
+                    style={{
+                      fontSize: fp(12),
+                      color: "#545EE1",
+                      fontWeight: "600",
+                    }}
+                  >
                     {courierInfo?.ratingAverage?.toFixed(1) || "N/A"}
                   </Text>
                   <Button
@@ -1151,13 +1190,21 @@ const CustomerTrackingView = () => {
                     </Text>
                   </View>
 
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: sp(8) }}>
-                    <Ionicons
-                      name="star"
-                      size={16}
-                      color="#545EE1"
-                    />
-                    <Text style={{ fontSize: fp(12), color: "#545EE1", fontWeight: "600" }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: sp(8),
+                    }}
+                  >
+                    <Ionicons name="star" size={16} color="#545EE1" />
+                    <Text
+                      style={{
+                        fontSize: fp(12),
+                        color: "#545EE1",
+                        fontWeight: "600",
+                      }}
+                    >
                       {courierInfo?.ratingAverage?.toFixed(1) || "N/A"}
                     </Text>
                     <Button

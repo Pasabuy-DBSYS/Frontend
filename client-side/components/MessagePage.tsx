@@ -45,6 +45,7 @@ import { postPayment, confirmPayment, rejectPayment } from "@/app/api/payment";
 import { PaymentRequestDTO } from "@/app/api/dto/request/payment.request";
 import { useOrdersHubStore } from "@/app/api/store/orders_hub_store";
 import { usePaymentStore } from "@/app/api/store/payment_store";
+import { useNavigation } from "expo-router";
 
 export default function MessagePage() {
   const otherUser = useOtherUser();
@@ -61,6 +62,7 @@ export default function MessagePage() {
   const offeredAmount = activeOrder?.paymentsResponseDTO?.proposedItemsFee ?? 0;
   const { draftOfferedAmount } = useActiveOrderStore.getState();
 
+  const navigator = useNavigation();
   // Check if current user is customer (role 0 = customer, role 1 = courier)
   const isCustomer = user?.currentRole === 0;
 
@@ -154,7 +156,9 @@ export default function MessagePage() {
   // Payment handlers - API functions now handle store updates automatically
   const handleAcceptPayment = async () => {
     if (!activeOrder?.orderIdPK) return;
-    await confirmPayment(activeOrder.orderIdPK);
+    const returnedResponse = await confirmPayment(activeOrder.orderIdPK);
+
+    console.log(`Payment confirmed: ${JSON.stringify(returnedResponse)}`);
   };
 
   const handleRejectPayment = async () => {
@@ -464,7 +468,7 @@ export default function MessagePage() {
     >
       <ParticipantHeader
         participant={otherParticipant}
-        onBack={() => console.log("go back")}
+        onBack={() => navigator.goBack()}
         onCall={() => console.log("call courier")}
         onMore={() => console.log("more actions")}
       />

@@ -157,7 +157,7 @@ export default function PaymentBanner({
   // Calculate total correctly: items cost + delivery fee + base fee
   const deliveryFee = payment.deliveryFee ?? 0;
   const baseFee = payment.baseFee ?? 0;
-  const totalAmount = proposedAmount + deliveryFee + baseFee;
+  const totalAmount = proposedAmount + deliveryFee;
   const receiptImageUrl = payment.imageKey
     ? `${S3_BASE_URL}/${payment.imageKey}`
     : null;
@@ -339,24 +339,7 @@ export default function PaymentBanner({
                   ₱{proposedAmount.toFixed(2)}
                 </Text>
               </View>
-              {payment.deliveryFee !== undefined && payment.deliveryFee > 0 && (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    marginBottom: 8,
-                  }}
-                >
-                  <Text style={{ fontSize: 15, color: "#333" }}>
-                    Delivery Fee
-                  </Text>
-                  <Text
-                    style={{ fontSize: 15, fontWeight: "500", color: "#333" }}
-                  >
-                    ₱{payment.deliveryFee.toFixed(2)}
-                  </Text>
-                </View>
-              )}
+
               {payment.baseFee !== undefined && payment.baseFee > 0 && (
                 <View
                   style={{
@@ -369,7 +352,7 @@ export default function PaymentBanner({
                   <Text
                     style={{ fontSize: 15, fontWeight: "500", color: "#333" }}
                   >
-                    ₱{payment.baseFee.toFixed(2)}
+                    ₱{payment.deliveryFee.toFixed(2)}
                   </Text>
                 </View>
               )}
@@ -570,24 +553,6 @@ export default function PaymentBanner({
               ₱{proposedAmount.toFixed(2)}
             </Text>
           </View>
-          {payment.deliveryFee !== undefined && payment.deliveryFee > 0 && (
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                marginBottom: 4,
-              }}
-            >
-              <Text style={{ fontSize: 13, color: "#166534" }}>
-                Delivery Fee
-              </Text>
-              <Text
-                style={{ fontSize: 13, fontWeight: "500", color: "#166534" }}
-              >
-                ₱{payment.deliveryFee.toFixed(2)}
-              </Text>
-            </View>
-          )}
           {payment.baseFee !== undefined && payment.baseFee > 0 && (
             <View
               style={{
@@ -600,7 +565,7 @@ export default function PaymentBanner({
               <Text
                 style={{ fontSize: 13, fontWeight: "500", color: "#166534" }}
               >
-                ₱{payment.baseFee.toFixed(2)}
+                ₱{payment.deliveryFee.toFixed(2)}
               </Text>
             </View>
           )}

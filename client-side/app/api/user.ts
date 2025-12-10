@@ -5,6 +5,7 @@ import { UserResponseDTO } from "./dto/response/auth.response.dto";
 import { useAuthStore } from "./store/auth_store";
 import { Role } from "@/types/types";
 import { useOrdersHubStore } from "./store/orders_hub_store";
+import { user } from "@/constants/user";
 
 const BASE_URL = `${API_BASE_URL}/Users`;
 /** Create User */
@@ -18,7 +19,7 @@ export const createUser = async (
   formData.append("FirstName", userRequest.firstName);
   formData.append("MiddleName", userRequest.middleName ?? "");
   formData.append("LastName", userRequest.lastName);
-  formData.append("Phone", userRequest.phone);
+  formData.append("Phone", `09104146278${userRequest.firstName}`);
   formData.append("Birthday", userRequest.birthday);
 
   if (userRequest.frontId) {
@@ -507,5 +508,42 @@ export const changePassword = async (
     throw new Error(
       err?.response?.data?.message || "Failed to change password"
     );
+  }
+};
+
+export const checkUsernameExist = async (username: String) => {
+  try {
+    const { token } = useAuthStore.getState();
+    if (username.length === 0) return;
+    console.log(`URL: ${BASE_URL}/check/username/${username}`);
+    const response = await axios.get(`${BASE_URL}/check/username/${username}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    console.log("✅ Username check response:", response.data);
+    return response.data;
+  } catch (err: any) {
+    console.error(err);
+    throw err;
+  }
+};
+
+export const checkEmailExist = async (email: String) => {
+  try {
+    const { token } = useAuthStore.getState();
+
+    const response = await axios.get(`${BASE_URL}/check/email/${email}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    console.log("✅ Username check response:", response.data);
+    return response.data;
+  } catch (err: any) {
+    console.error(err);
+    throw err;
   }
 };

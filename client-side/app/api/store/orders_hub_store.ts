@@ -14,13 +14,25 @@ interface OrdersHubState {
   isConnecting: boolean;
   // Store handlers for rebinding on reconnection
   handlers: Map<string, (...args: any[]) => void>;
+  // Store per-order handlers: orderId -> (event -> callback)
+  orderHandlers: Map<number, Map<string, (...args: any[]) => void>>;
   // Store joined groups for rejoining on reconnection
   // Track current role group (courier or customer)
   currentRoleGroup: RoleGroup;
+  // Track joined order groups to rejoin after reconnect
+  joinedOrderIds: Set<number>;
   initConnection: () => Promise<signalR.HubConnection | null>;
   joinRoleGroup: (role: RoleGroup) => Promise<void>;
+  joinOrderGroup: (orderId: number) => Promise<void>;
+  leaveOrderGroup: (orderId: number) => Promise<void>;
   addHandler: (event: string, callback: (...args: any[]) => void) => void;
   removeHandler: (event: string) => void;
+  addOrderHandler: (
+    orderId: number,
+    event: string,
+    callback: (...args: any[]) => void
+  ) => void;
+  removeOrderHandler: (orderId: number, event: string) => void;
   invokeHub: (event: string, ...args: any[]) => Promise<void>;
   disconnect: () => Promise<void>;
 }
@@ -30,7 +42,9 @@ export const useOrdersHubStore = create<OrdersHubState>((set, get) => ({
   isReady: false,
   isConnecting: false,
   handlers: new Map(),
+  orderHandlers: new Map(),
   currentRoleGroup: null,
+  joinedOrderIds: new Set(),
 
   initConnection: async () => {
     const state = get();
@@ -91,11 +105,11 @@ export const useOrdersHubStore = create<OrdersHubState>((set, get) => ({
         const currentState = get();
 
         // Rebind all stored handlers
-        currentState.handlers.forEach((callback, event) => {
-          console.log(`  ↪ Rebinding handler: ${event}`);
-          conn!.off(event);
-          conn!.on(event, callback);
-        });
+          currentState.handlers.forEach((callback, event) => {
+            console.log(`  ↪ Rebinding handler: ${event}`);
+            conn!.off(event);
+            conn!.on(event, callback);
+          });
 
         // Rejoin role group (courier/customer)
         if (currentState.currentRoleGroup) {
@@ -109,6 +123,25 @@ export const useOrdersHubStore = create<OrdersHubState>((set, get) => ({
             if (conn) await conn.invoke(groupMethod);
           } catch (err) {
             console.error("Failed to rejoin role group:", err);
+          }
+        }
+
+        // Rejoin any order groups and rebind per-order handlers
+        if (currentState.joinedOrderIds && conn) {
+          for (const orderId of Array.from(currentState.joinedOrderIds)) {
+            try {
+              console.log(`  ↪ Rejoining order group: ${orderId}`);
+              await conn.invoke("JoinOrderGroup", orderId);
+
+              const orderMap = currentState.orderHandlers.get(orderId);
+              orderMap?.forEach((cb, evt) => {
+                console.log(`    ↪ Rebinding order handler: ${evt} for order ${orderId}`);
+                conn!.off(evt);
+                conn!.on(evt, cb);
+              });
+            } catch (err) {
+              console.error("Failed to rejoin order group:", err);
+            }
           }
         }
 
@@ -176,6 +209,90 @@ export const useOrdersHubStore = create<OrdersHubState>((set, get) => ({
     }
   },
 
+  // Join a specific order group so the server will send order-scoped events
+  joinOrderGroup: async (orderId: number) => {
+    const conn = get().connection;
+    if (!conn || conn.state !== signalR.HubConnectionState.Connected) {
+      console.warn("⚠️ Cannot join order group: Not connected");
+      return;
+    }
+
+    if (!useAuthStore.getState().checkTokenValidity()) {
+      console.warn("⚠️ Cannot join order group: Token invalid");
+      return;
+    }
+
+    try {
+      await conn.invoke("JoinOrderGroup", orderId);
+      const joined = new Set(get().joinedOrderIds);
+      joined.add(orderId);
+      set({ joinedOrderIds: joined });
+      console.log(`✅ Joined order group: ${orderId}`);
+
+      // Bind any existing per-order handlers for this order
+      const orderMap = get().orderHandlers.get(orderId);
+      orderMap?.forEach((cb, evt) => {
+        conn.off(evt);
+        conn.on(evt, cb);
+      });
+    } catch (err) {
+      console.error("❌ Failed to join order group:", err);
+    }
+  },
+
+  leaveOrderGroup: async (orderId: number) => {
+    const conn = get().connection;
+    if (!conn || conn.state !== signalR.HubConnectionState.Connected) {
+      console.warn("⚠️ Cannot leave order group: Not connected");
+      return;
+    }
+
+    try {
+      await conn.invoke("LeaveOrderGroup", orderId);
+      const joined = new Set(get().joinedOrderIds);
+      joined.delete(orderId);
+      set({ joinedOrderIds: joined });
+      console.log(`✅ Left order group: ${orderId}`);
+    } catch (err) {
+      console.error("❌ Failed to leave order group:", err);
+    }
+  },
+
+  // Per-order handler registration
+  addOrderHandler: (orderId, event, callback) => {
+    const conn = get().connection;
+    const orderHandlers = new Map(get().orderHandlers);
+
+    let map = orderHandlers.get(orderId);
+    if (!map) {
+      map = new Map<string, (...args: any[]) => void>();
+      orderHandlers.set(orderId, map);
+    }
+
+    map.set(event, callback);
+    set({ orderHandlers: new Map(orderHandlers) });
+
+    if (!conn) return;
+    conn.off(event);
+    conn.on(event, callback);
+    console.log(`📡 Order handler registered: ${event} for order ${orderId}`);
+  },
+
+  removeOrderHandler: (orderId, event) => {
+    const conn = get().connection;
+    const orderHandlers = new Map(get().orderHandlers);
+
+    const map = orderHandlers.get(orderId);
+    if (map) {
+      map.delete(event);
+      if (map.size === 0) orderHandlers.delete(orderId);
+      set({ orderHandlers: new Map(orderHandlers) });
+    }
+
+    conn?.off(event);
+    console.log(`🚫 Order handler removed: ${event} for order ${orderId}`);
+  },
+
   // Add SignalR handler safely and store for reconnection
   addHandler: (event, callback) => {
     const conn = get().connection;
@@ -234,6 +351,8 @@ export const useOrdersHubStore = create<OrdersHubState>((set, get) => ({
         isReady: false,
         isConnecting: false,
         handlers: new Map(),
+        orderHandlers: new Map(),
+        joinedOrderIds: new Set(),
         currentRoleGroup: null,
       });
     }

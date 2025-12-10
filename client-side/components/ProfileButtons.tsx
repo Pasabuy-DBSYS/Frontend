@@ -105,24 +105,6 @@ const ProfileButtons = ({ users }: ProfileProp) => {
         }}
       />
 
-      {/* Update Insurance */}
-      <ProfileButtonItem
-        icon="shield-checkmark-outline"
-        label="Update Insurance"
-        onPress={() =>
-          navigation.navigate("InsuranceVerification" as never, {
-            title: "Update Insurance",
-          })
-        }
-      />
-
-      {/* Terms and Conditions */}
-      <ProfileButtonItem
-        icon="document-text-outline"
-        label="Term and Conditions"
-        onPress={() => console.log("Term and Conditions pressed")}
-      />
-
       {/* Settings */}
       <ProfileButtonItem
         icon="settings-outline"
