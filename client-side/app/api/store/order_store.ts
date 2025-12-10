@@ -13,6 +13,7 @@ import {
   getCurrentOrderAsCustomer,
   getOrderById,
 } from "../orders";
+import { Coordinates } from "@/types/interfaces";
 
 interface ActiveOrderState {
   // Persisted state
@@ -26,6 +27,9 @@ interface ActiveOrderState {
   showOrderAccepted: boolean;
   draftOfferedAmount: number;
 
+  // Non-persisted courier location tracking (transient state)
+  trackCourierLocation: Coordinates | null;
+
   // Actions
   setActiveOrder: (order: OrderResponseDTO | null) => void;
   setTempOrderRequest: (orderRequest: PostOrderRequestDTO | null) => void;
@@ -34,6 +38,7 @@ interface ActiveOrderState {
   setShowOrderAccepted: (arg: boolean) => void;
   setPendingReview: (arg: boolean) => void;
   setDraftOfferedAmount: (arg: number) => void;
+  setTrackCourierLocation: (location: Coordinates | null) => void;
 
   clearActiveOrder: () => void;
   resetModalStates: () => void;
@@ -53,6 +58,7 @@ export const useActiveOrderStore = create<ActiveOrderState>()(
       isDelivered: false,
       showOrderAccepted: false,
       draftOfferedAmount: 0,
+      trackCourierLocation: null,
 
       setActiveOrder: (order) => set({ activeOrder: order }),
       setTempOrderRequest: (orderRequest) =>
@@ -61,7 +67,27 @@ export const useActiveOrderStore = create<ActiveOrderState>()(
       setIsDelivered: (arg) => set({ isDelivered: arg }),
       setShowOrderAccepted: (arg) => set({ showOrderAccepted: arg }),
       setPendingReview: (arg) => set({ pendingReview: arg }),
-      setDraftOfferedAmount: (arg) => set({draftOfferedAmount: arg}),
+      setDraftOfferedAmount: (arg) => set({ draftOfferedAmount: arg }),
+      setTrackCourierLocation: (location) => {
+        set({ trackCourierLocation: location });
+
+        // Also update activeOrder with new courier coordinates
+        if (location) {
+          const currentOrder = get().activeOrder;
+          if (currentOrder && currentOrder.deliveryDetailsDTO) {
+            set({
+              activeOrder: {
+                ...currentOrder,
+                deliveryDetailsDTO: {
+                  ...currentOrder.deliveryDetailsDTO,
+                  courierLatitude: location.latitude,
+                  courierLongitude: location.longitude,
+                },
+              },
+            });
+          }
+        }
+      },
 
       // Reset only modal states (not the order itself)
       resetModalStates: () =>
@@ -69,6 +95,7 @@ export const useActiveOrderStore = create<ActiveOrderState>()(
           isCancelled: false,
           isDelivered: false,
           showOrderAccepted: false,
+          trackCourierLocation: null,
         }),
 
       clearActiveOrder: async () => {
@@ -79,6 +106,7 @@ export const useActiveOrderStore = create<ActiveOrderState>()(
           isDelivered: false,
           showOrderAccepted: false,
           pendingReview: false,
+          trackCourierLocation: null,
         });
 
         await AsyncStorage.removeItem("active-order-storage");

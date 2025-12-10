@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Button } from "@/components/Button";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { Role, RootNav } from "@/types/types";
+import { Role, RootNav, VerificationInfoStatus } from "@/types/types";
 import { Login } from "@/app/api/auth";
 import { useAuthStore } from "@/app/api/store/auth_store";
 
@@ -38,6 +38,12 @@ const LoginScreen = () => {
 
       // 🔹 Save token & user profile
       await login(token);
+
+      const { user } = useAuthStore.getState();
+      if (user?.verifiactionInfoDTO.verificationInfoStatus !== 2) {
+        navigation.navigate("Unverified" as never);
+        return;
+      }
 
       const role = useAuthStore.getState().user?.currentRole;
       const routeName =

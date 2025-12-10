@@ -5,10 +5,11 @@ import {
 } from "@/types/types";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import React, { act, use, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
   View,
   Text,
+  Alert,
   Animated,
   Dimensions,
   PanResponder,
@@ -32,6 +33,7 @@ import PickIcon from "@/components/svg/PickIcon";
 import ConfirmPickupModal from "@/components/modals/ConfirmDeliver";
 import CancelDeliver from "@/components/modals/CancelDeliver";
 import {
+  estimateDeliveryTime,
   getCurrentOrderAsCourier,
   getOrderById,
   receiveOrderRealtime,
@@ -103,6 +105,7 @@ const CourierTrackingView = () => {
   const [tempActiveOrder, setTempActiveOrder] = useState<any>();
   const [orderCancelledModal, setOrderCancelledModal] =
     useState<boolean>(false);
+  const [deliveryTime, setDeliveryTime] = useState<any>({});
 
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -126,7 +129,9 @@ const CourierTrackingView = () => {
 
   const [phase, setPhase] = useState<"pickup" | "delivery">("pickup");
   const [isNearPickup, setIsNearPickup] = useState(false);
+  const [isNearDestination, setIsNearDestination] = useState(false);
   const PICKUP_RADIUS = 100;
+  const DELIVERY_RADIUS = 100; // meters - only allow finish within 100m
 
   // Animated courier location
   const courierLocation = useRef(
@@ -330,6 +335,20 @@ const CourierTrackingView = () => {
             );
           }
 
+          // Check if near delivery location (only during delivery phase)
+          if (phase === "delivery") {
+            const distanceToCustomer = getDistance(
+              courierCoords,
+              customerLocation
+            );
+            setIsNearDestination(distanceToCustomer <= DELIVERY_RADIUS);
+            console.log(
+              `Distance to destination: ${distanceToCustomer.toFixed(
+                0
+              )}m, Near: ${distanceToCustomer <= DELIVERY_RADIUS}`
+            );
+          }
+
           // Determine destination based on phase
           const destination =
             phase === "pickup" ? pinnedLocation : customerLocation;
@@ -353,6 +372,17 @@ const CourierTrackingView = () => {
             console.log(
               `SignalR: Sent location update for Order ${orderId}: ${courierCoords.latitude}, ${courierCoords.longitude}`
             );
+
+            const customerLocation: Coordinates = {
+              latitude: activeOrder.deliveryDetailsDTO.customerLatitude,
+              longitude: activeOrder.deliveryDetailsDTO.customerLongitude,
+            };
+            const tempTime = await estimateDeliveryTime(
+              courierCoords,
+              customerLocation
+            );
+
+            setDeliveryTime(tempTime);
           } catch (err) {
             console.error("SignalR: Failed to send location update", err);
           }
@@ -417,12 +447,6 @@ const CourierTrackingView = () => {
     };
 
     setupSignalR();
-
-    return () => {
-      removeHandler("OrderStatusUpdated");
-      removeHandler("PaymentConfirmed");
-      removeHandler("PaymentResponded");
-    };
   }, [activeOrder]);
 
   useEffect(() => {
@@ -894,19 +918,47 @@ const CourierTrackingView = () => {
                 </Text>
               </View>
 
-              {/* Right section: Message button */}
-              <Button
-                onPress={() => {
-                  navigator.navigate("MessagePage");
+              {/* Right section: Rating + Message button */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: sp(8),
                 }}
-                title="Message"
-                width={ms(85)}
-                height={ms(30)}
-                borderRadius={br(20)}
-                fontSize={fp(12)}
-                backgroundColor="#545EE1"
-                textColor="white"
-              />
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: sp(6),
+                    marginRight: sp(8),
+                  }}
+                >
+                  <Ionicons name="star" size={16} color="#545EE1" />
+                  <Text
+                    style={{
+                      fontSize: fp(12),
+                      color: "#545EE1",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {customerInfo?.ratingAverage?.toFixed(1) ?? "N/A"}
+                  </Text>
+                </View>
+
+                <Button
+                  onPress={() => {
+                    navigator.navigate("MessagePage");
+                  }}
+                  title="Message"
+                  width={ms(85)}
+                  height={ms(30)}
+                  borderRadius={br(20)}
+                  fontSize={fp(12)}
+                  backgroundColor="#545EE1"
+                  textColor="white"
+                />
+              </View>
             </View>
 
             {/* Row: Icon + Delivery Details */}
@@ -1167,6 +1219,19 @@ const CourierTrackingView = () => {
                       <Button
                         onPress={async () => {
                           if (!activeOrder) return;
+                          if (!isNearDestination) {
+                            const distance = getDistance(
+                              currentCourierPos.current,
+                              customerLocation
+                            );
+                            Alert.alert(
+                              "Too far",
+                              `You are ${Math.round(
+                                distance
+                              )}m away. You must be within ${DELIVERY_RADIUS}m to finish the order.`
+                            );
+                            return;
+                          }
                           try {
                             await updateOrderById(
                               activeOrder.orderIdPK,
@@ -1182,8 +1247,9 @@ const CourierTrackingView = () => {
                         height={hp(5)}
                         borderRadius={br(20)}
                         fontSize={fp(14)}
-                        backgroundColor="#4CAF50"
+                        backgroundColor={isNearDestination ? "#4CAF50" : "#ccc"}
                         textColor="white"
+                        disabled={!isNearDestination}
                       />
                     </View>
                   )}

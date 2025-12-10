@@ -88,21 +88,6 @@ export default function ParticipantHeader({
         </Text>
       </View>
 
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          columnGap: 8,
-        }}
-      >
-        <TouchableOpacity hitSlop={12} style={{ padding: 6 }}>
-          <Feather name="phone-call" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        <TouchableOpacity hitSlop={12} style={{ padding: 6 }}>
-          <Feather name="more-vertical" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }

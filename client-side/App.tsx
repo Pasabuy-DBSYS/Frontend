@@ -31,6 +31,8 @@ import { useNotificationHubStore } from "./app/api/store/notification_hub_store"
 import { useActiveOrderStore } from "./app/api/store/order_store";
 import Home from "./app/customer/CustomerHome";
 import Settings from "./components/Settings";
+import Unverified from "./app/auth/Unverified";
+import { VerificationInfoStatus } from "./app/api/dto/response/auth.response.dto";
 
 const Stack = createNativeStackNavigator();
 
@@ -46,7 +48,6 @@ export default function App() {
           useNotificationHubStore.getState();
         const { rehydrateActiveOrder } = useActiveOrderStore.getState();
 
-        
         const hasVisited = await AsyncStorage.getItem("hasVisited");
 
         // 🔹 First-time launch or after clear cache
@@ -56,6 +57,7 @@ export default function App() {
           return;
         }
 
+        await AsyncStorage.clear();
         // 🔹 Returning user
         const valid = checkTokenValidity();
         if (!valid) {
@@ -110,6 +112,33 @@ export default function App() {
 
     init();
   }, [token]);
+
+  // 🌍 Global SignalR Connection - Keep alive throughout app lifecycle
+  useEffect(() => {
+    const setupGlobalSignalR = async () => {
+      if (!token || !user) {
+        console.log("[GLOBAL] No token/user, skipping SignalR");
+        return;
+      }
+
+      const { initConnection } = useOrdersHubStore.getState();
+
+      try {
+        await initConnection();
+        console.log("✅ [GLOBAL] SignalR connected and will persist");
+      } catch (err) {
+        console.error("❌ [GLOBAL] SignalR connection failed:", err);
+      }
+    };
+
+    setupGlobalSignalR();
+
+    // Don't cleanup - keep connection alive throughout app lifetime
+    return () => {
+      // Intentionally NOT disconnecting to maintain connection
+      console.log("[GLOBAL] App unmounting but keeping SignalR alive");
+    };
+  }, [token, user]);
 
   if (!initialRoute) {
     return (
@@ -169,6 +198,7 @@ export default function App() {
           component={CustomerTrackingView}
         ></Stack.Screen>
         <Stack.Screen name="ReviewOrder" component={ReviewOrder} />
+        <Stack.Screen name="Unverified" component={Unverified} />
       </Stack.Navigator>
     </NavigationContainer>
   );

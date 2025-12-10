@@ -1,6 +1,5 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import AddNameScreen from "../auth/register-screen/AddNameScreen";
 import PhoneNumberPage from "../auth/register-screen/PhoneNumberPage";
 import VerifyPhoneNumber from "../auth/register-screen/VerifyPhoneNumber";
 import VerifyEmailAdress from "../auth/register-screen/VerifyEmailAdress";
@@ -21,9 +20,6 @@ export default function RegisterStack() {
   return (
     <RegisterProvider>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="AddNameScreen" component={AddNameScreen} />
-        <Stack.Screen name="PhoneNumber" component={PhoneNumberPage} />
-        <Stack.Screen name="VerifyPhoneNumber" component={VerifyPhoneNumber} />
         <Stack.Screen name="VerifyEmailAddress" component={VerifyEmailAdress} />
         <Stack.Screen
           name="PersonalInformation"

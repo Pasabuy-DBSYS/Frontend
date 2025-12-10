@@ -61,7 +61,7 @@ const calculateDistance = (
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // Distance in kilometers
+  return R * c;
 };
 
 const Orders: React.FC = () => {
@@ -113,7 +113,7 @@ const Orders: React.FC = () => {
       setDistanceKm(distance);
 
       // Calculate delivery fee: Base fee + (distance * per km rate)
-      const calculatedFee = BASE_FEE + Math.ceil(distance) * PER_KM_RATE;
+      const calculatedFee = BASE_FEE + distance * PER_KM_RATE;
       setDeliveryFee(calculatedFee);
     } else {
       setDistanceKm(0);
@@ -122,8 +122,13 @@ const Orders: React.FC = () => {
   }, [deviceLocation, fullLocation]);
 
   // Calculate total price
+  // We intentionally remove 'deliveryFee' as a direct addition because 'BASE_FEE' is the canonical base charge.
+  // We show 'distance' related charge separately as a "Distance Fee" which is the delivery fee minus the base.
   const getTotalPrice = (): number => {
-    let total = deliveryFee;
+    // distanceFeeOnly represents the variable portion (deliveryFee - BASE_FEE)
+    const distanceFeeOnly = Math.max(0, deliveryFee - BASE_FEE);
+
+    let total = BASE_FEE + distanceFeeOnly;
     if (tipAmount) total += parseFloat(tipAmount) || 0;
     if (isUrgent) total += URGENT_FEE;
     return total;
@@ -190,7 +195,8 @@ const Orders: React.FC = () => {
         customerLongitude: deviceLocation.longitude,
         customerAddress: deviceAddress as string,
         destinationAddress: commissionData.address,
-        deliveryDistance: coordinates.length || 0,
+        // Use the calculated distance in kilometers, not the coordinate array length
+        deliveryDistance: Number(distanceKm.toFixed(2)) || 0,
         deliveryNotes: commissionData.deliveryInstructions,
       };
 
@@ -875,6 +881,7 @@ const Orders: React.FC = () => {
                 >
                   Price Breakdown
                 </Text>
+                {/* Show Base Fee and Distance Fee separately so base is not double counted */}
                 <View
                   style={{
                     flexDirection: "row",
@@ -883,7 +890,7 @@ const Orders: React.FC = () => {
                   }}
                 >
                   <Text style={{ color: "#666", fontSize: fp(13) }}>
-                    Delivery Fee ({distanceKm.toFixed(1)} km)
+                    Base Fee
                   </Text>
                   <Text
                     style={{
@@ -892,9 +899,31 @@ const Orders: React.FC = () => {
                       fontWeight: "500",
                     }}
                   >
-                    ₱{deliveryFee}
+                    ₱{BASE_FEE}
                   </Text>
                 </View>
+                {Math.max(0, deliveryFee - BASE_FEE) > 0 && (
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      marginBottom: sp(6),
+                    }}
+                  >
+                    <Text style={{ color: "#666", fontSize: fp(13) }}>
+                      Distance Fee ({distanceKm.toFixed(1)} km)
+                    </Text>
+                    <Text
+                      style={{
+                        color: "#333",
+                        fontSize: fp(13),
+                        fontWeight: "500",
+                      }}
+                    >
+                      ₱{(deliveryFee - BASE_FEE).toFixed(2)}
+                    </Text>
+                  </View>
+                )}
                 {tipAmount && parseFloat(tipAmount) > 0 && (
                   <View
                     style={{
@@ -966,7 +995,7 @@ const Orders: React.FC = () => {
                       fontWeight: "700",
                     }}
                   >
-                    ₱{getTotalPrice()}
+                    ₱{getTotalPrice().toFixed(2)}
                   </Text>
                 </View>
               </View>
@@ -998,7 +1027,7 @@ const Orders: React.FC = () => {
                     fontSize: fp(16),
                   }}
                 >
-                  ₱{getTotalPrice()}
+                  ₱{getTotalPrice().toFixed(2)}
                 </Text>
                 <Text
                   style={{

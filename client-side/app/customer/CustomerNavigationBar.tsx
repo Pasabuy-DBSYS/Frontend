@@ -22,6 +22,8 @@ import { useOrdersHubStore } from "../api/store/orders_hub_store";
 import { useActiveOrderStore } from "../api/store/order_store";
 import { useMessageRoomState } from "../api/store/message_room_store";
 import Notifications from "@/components/Notifications";
+import { usePaymentStore } from "../api/store/payment_store";
+import { Status } from "../api/dto/response/order.response.dto";
 
 const CustomerNavigationBar = () => {
   const [activeTab, setActiveTab] = useState(2);
@@ -29,6 +31,8 @@ const CustomerNavigationBar = () => {
   const route = useRoute<any>();
   const navPage = route.params?.navPage;
   const { disconnect, isReady } = useOrdersHubStore();
+
+  const { activeOrder, setActiveOrder } = useActiveOrderStore();
 
   const navItems = [
     { icon: <CartIcon />, name: "Cart" },
@@ -65,6 +69,96 @@ const CustomerNavigationBar = () => {
       }
     };
   }, []);
+
+  // SignalR: Listen for Courier Location Updates and Order Status Updates
+  useEffect(() => {
+    if (!activeOrder?.orderIdPK) return;
+
+    const { initConnection, addHandler, removeHandler, invokeHub } =
+      useOrdersHubStore.getState();
+
+    const setupSignalR = async () => {
+      try {
+        await initConnection();
+        console.log(
+          "[HUB][CUSTOMER-NAVBAR] CustomerNavigationBar connected OrdersHub and joining order group"
+        );
+
+        // Join the order group to receive updates
+        console.log(
+          `[HUB][CUSTOMER-NAVBAR] JoinOrderGroup from CustomerNavigationBar orderId=${activeOrder.orderIdPK}`
+        );
+        await invokeHub("JoinOrderGroup", activeOrder.orderIdPK);
+
+        // Handler for courier location updates - Update active order with courier location
+        addHandler("CourierLocationUpdated", async (locationData: any) => {
+          console.log(
+            "📍 [OTIN] YAWA BAAI CourierLocationUpdated received:",
+            locationData
+          );
+
+          // Update active order with new courier location so it persists
+          if (activeOrder && activeOrder.deliveryDetailsDTO) {
+            setActiveOrder({
+              ...activeOrder,
+              deliveryDetailsDTO: {
+                ...activeOrder.deliveryDetailsDTO,
+                courierLatitude: locationData.courierLatitude,
+                courierLongitude: locationData.courierLongitude,
+              },
+            });
+          }
+        });
+
+        // Handler for when order is accepted by a courier
+        addHandler("OrderAccepted", (updatedOrder: any) => {
+          console.log(
+            "📬 [CUSTOMERNAVBAR] OrderAccepted received:",
+            updatedOrder
+          );
+          setActiveOrder(updatedOrder);
+        });
+
+        // Handler for payment proposal from courier
+        addHandler("PaymentProposalAccepted", (paymentData: any) => {
+          console.log(
+            "💰 [CUSTOMERNAVBAR] PaymentProposal received:",
+            paymentData
+          );
+          usePaymentStore.getState().setPayment(paymentData);
+        });
+
+        addHandler("PaymentProposalRejected", (paymentData: any) => {
+          console.log(
+            "❌ [NAVBAR] PaymentProposalRejected received:",
+            paymentData
+          );
+          usePaymentStore.getState().setPayment(paymentData);
+        });
+
+        // Handler for order status updates (DELIVERED, CANCELLED, etc.)
+        addHandler("OrderStatusUpdated", (updatedOrder: any) => {
+          console.log("♻️ [NAVBAR] OrderStatusUpdated received:", updatedOrder);
+          setActiveOrder(updatedOrder);
+        });
+      } catch (err) {
+        console.error("[NAVBAR] SignalR Setup Error:", err);
+      }
+    };
+
+    setupSignalR();
+
+    // Cleanup: Remove handlers when component unmounts or order changes
+    return () => {
+      console.log("[HUB][CUSTOMER-NAVBAR] Cleaning up SignalR handlers");
+      const { removeHandler } = useOrdersHubStore.getState();
+      removeHandler("CourierLocationUpdated");
+      removeHandler("OrderAccepted");
+      removeHandler("PaymentProposalAccepted");
+      removeHandler("PaymentProposalRejected");
+      removeHandler("OrderStatusUpdated");
+    };
+  }, [activeOrder?.orderIdPK]);
 
   // Scale animation (no lift)
   const scaleAnims = useRef(
